@@ -1,12 +1,16 @@
 import React, { useState } from "react";
-import { Warehouse, Users, Building2, Settings2, Plus, Edit2, Trash2, X, Check } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Warehouse, Building2, Users, Settings2, Plus, Edit2, Trash2, Check } from "lucide-react";
+import { GlassCard } from "@/components/ui/GlassCard";
+import { GlassCardSubtle } from "@/components/ui/GlassCard";
+import { GlassBadge } from "@/components/ui/GlassBadge";
+import { GlassButton } from "@/components/ui/GlassButton";
+import { GlassModal } from "@/components/ui/GlassModal";
 
 type Tab = "gudang" | "mitra" | "pengguna" | "konfigurasi";
 
 interface Gudang { id: string; name: string; location: string; pic: string; phone: string; is_active: boolean; }
 interface Mitra { id: string; type: "SUPPLIER" | "CUSTOMER"; name: string; phone: string; email: string; address: string; }
-interface Pengguna { id: string; username: string; full_name: string; role: "ADMIN" | "MANAGER" | "OPERATOR"; status: "ACTIVE" | "INACTIVE"; }
+interface Pengguna { id: string; username: string; full_name: string; role: "ADMIN" | "MANAGER" | "STAFF"; status: "ACTIVE" | "INACTIVE"; }
 
 const MOCK_GUDANG: Gudang[] = [
   { id: "wh-001", name: "Gudang Utama", location: "Jl. Industri No. 1, Jakarta", pic: "Ahmad Fauzi", phone: "021-1234567", is_active: true },
@@ -22,53 +26,44 @@ const MOCK_USERS: Pengguna[] = [
 ];
 
 const TABS: { key: Tab; label: string; icon: React.ElementType }[] = [
-  { key: "gudang", label: "Gudang", icon: Warehouse },
-  { key: "mitra", label: "Mitra", icon: Building2 },
-  { key: "pengguna", label: "Pengguna", icon: Users },
-  { key: "konfigurasi", label: "Konfigurasi", icon: Settings2 },
+  { key: "gudang",       label: "Gudang",       icon: Warehouse },
+  { key: "mitra",        label: "Mitra",        icon: Building2 },
+  { key: "pengguna",     label: "Pengguna",     icon: Users },
+  { key: "konfigurasi",   label: "Konfigurasi",   icon: Settings2 },
 ];
 
 function GudangTab() {
   const [items, setItems] = useState<Gudang[]>(MOCK_GUDANG);
-  const [editing, setEditing] = useState<Gudang | null>(null);
-  const [showForm, setShowForm] = useState(false);
-
   return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <p className="text-sm text-muted-foreground">{items.length} gudang terdaftar</p>
-        <button onClick={() => { setEditing(null); setShowForm(true); }}
-          className="flex items-center gap-2 bg-primary text-primary-foreground px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-90 transition-all">
-          <Plus className="w-3.5 h-3.5" /> Tambah Gudang
-        </button>
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <p style={{ fontSize: 13, color: "#94a3b8", margin: 0 }}>{items.length} gudang terdaftar</p>
+        <GlassButton><Plus size={14} /> Tambah Gudang</GlassButton>
       </div>
-      <div className="grid gap-3">
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {items.map(g => (
-          <div key={g.id} className="bg-background border border-border rounded-xl p-4 flex items-start gap-4">
-            <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center shrink-0">
-              <Warehouse className="w-5 h-5 text-primary" />
+          <GlassCardSubtle key={g.id} style={{ padding: 16, display: "flex", alignItems: "flex-start", gap: 14 }}>
+            <div style={{
+              width: 40, height: 40, background: "rgba(59,130,246,0.12)", borderRadius: 10,
+              display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+            }}>
+              <Warehouse size={18} color="#1e3a5f" />
             </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="font-semibold text-sm">{g.name}</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: "#1e2d40" }}>{g.name}</span>
                 {g.is_active
-                  ? <span className="text-xs bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-full">Aktif</span>
-                  : <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full">Nonaktif</span>}
+                  ? <GlassBadge type="ACTIVE" />
+                  : <GlassBadge type="INACTIVE" />}
               </div>
-              <p className="text-xs text-muted-foreground mt-0.5">{g.location}</p>
-              <p className="text-xs text-muted-foreground">PIC: {g.pic} · {g.phone}</p>
+              <p style={{ fontSize: 12, color: "#94a3b8", margin: "4px 0 2px" }}>{g.location}</p>
+              <p style={{ fontSize: 12, color: "#94a3b8", margin: 0 }}>PIC: {g.pic} · {g.phone}</p>
             </div>
-            <div className="flex gap-1 shrink-0">
-              <button onClick={() => { setEditing(g); setShowForm(true); }}
-                className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-colors">
-                <Edit2 className="w-3.5 h-3.5" />
-              </button>
-              <button onClick={() => setItems(prev => prev.filter(i => i.id !== g.id))}
-                className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors">
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
+            <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+              <button style={{ padding: "8px 9px", background: "rgba(59,130,246,0.10)", border: "1px solid rgba(59,130,246,0.15)", borderRadius: 8, cursor: "pointer", display: "flex", alignItems: "center", color: "#1e3a5f" }}><Edit2 size={14} /></button>
+              <button onClick={() => setItems(prev => prev.filter(i => i.id !== g.id))} style={{ padding: "8px 9px", background: "rgba(239,68,68,0.10)", border: "1px solid rgba(239,68,68,0.15)", borderRadius: 8, cursor: "pointer", display: "flex", alignItems: "center", color: "#dc2626" }}><Trash2 size={14} /></button>
             </div>
-          </div>
+          </GlassCardSubtle>
         ))}
       </div>
     </div>
@@ -78,39 +73,35 @@ function GudangTab() {
 function MitraTab() {
   const [items, setItems] = useState<Mitra[]>(MOCK_MITRA);
   return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <p className="text-sm text-muted-foreground">{items.length} mitra terdaftar</p>
-        <button className="flex items-center gap-2 bg-primary text-primary-foreground px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-90 transition-all">
-          <Plus className="w-3.5 h-3.5" /> Tambah Mitra
-        </button>
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <p style={{ fontSize: 13, color: "#94a3b8", margin: 0 }}>{items.length} mitra terdaftar</p>
+        <GlassButton><Plus size={14} /> Tambah Mitra</GlassButton>
       </div>
-      <div className="grid gap-3">
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {items.map(m => (
-          <div key={m.id} className="bg-background border border-border rounded-xl p-4 flex items-start gap-4">
-            <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center shrink-0 text-xs font-bold",
-              m.type === "SUPPLIER" ? "bg-blue-500/10 text-blue-500" : "bg-purple-500/10 text-purple-500"
-            )}>
+          <GlassCardSubtle key={m.id} style={{ padding: 16, display: "flex", alignItems: "flex-start", gap: 14 }}>
+            <div style={{
+              width: 40, height: 40, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 16, fontWeight: 800, flexShrink: 0,
+              background: m.type === "SUPPLIER" ? "rgba(16,185,129,0.12)" : "rgba(139,92,246,0.12)",
+              color: m.type === "SUPPLIER" ? "#047857" : "#6d28d9",
+            }}>
               {m.type === "SUPPLIER" ? "S" : "C"}
             </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="font-semibold text-sm">{m.name}</span>
-                <span className={cn("text-xs px-2 py-0.5 rounded-full",
-                  m.type === "SUPPLIER" ? "bg-blue-500/10 text-blue-600 dark:text-blue-400" : "bg-purple-500/10 text-purple-600 dark:text-purple-400"
-                )}>
-                  {m.type === "SUPPLIER" ? "Supplier" : "Pelanggan"}
-                </span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: "#1e2d40" }}>{m.name}</span>
+                <GlassBadge type={m.type === "SUPPLIER" ? "SUPPLIER" : "CUSTOMER"} />
               </div>
-              <p className="text-xs text-muted-foreground mt-0.5">{m.phone} · {m.email}</p>
-              <p className="text-xs text-muted-foreground">{m.address}</p>
+              <p style={{ fontSize: 12, color: "#94a3b8", margin: "4px 0 2px" }}>{m.phone} · {m.email}</p>
+              <p style={{ fontSize: 12, color: "#94a3b8", margin: 0 }}>{m.address}</p>
             </div>
-            <div className="flex gap-1 shrink-0">
-              <button className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"><Edit2 className="w-3.5 h-3.5" /></button>
-              <button onClick={() => setItems(prev => prev.filter(i => i.id !== m.id))}
-                className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
+            <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+              <button style={{ padding: "8px 9px", background: "rgba(59,130,246,0.10)", border: "1px solid rgba(59,130,246,0.15)", borderRadius: 8, cursor: "pointer", display: "flex", alignItems: "center", color: "#1e3a5f" }}><Edit2 size={14} /></button>
+              <button onClick={() => setItems(prev => prev.filter(i => i.id !== m.id))} style={{ padding: "8px 9px", background: "rgba(239,68,68,0.10)", border: "1px solid rgba(239,68,68,0.15)", borderRadius: 8, cursor: "pointer", display: "flex", alignItems: "center", color: "#dc2626" }}><Trash2 size={14} /></button>
             </div>
-          </div>
+          </GlassCardSubtle>
         ))}
       </div>
     </div>
@@ -119,58 +110,58 @@ function MitraTab() {
 
 function PenggunaTab() {
   const [users, setUsers] = useState<Pengguna[]>(MOCK_USERS);
-  const ROLE_COLORS: Record<string, string> = {
-    ADMIN: "bg-red-500/10 text-red-600 dark:text-red-400",
-    MANAGER: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
-    OPERATOR: "bg-green-500/10 text-green-600 dark:text-green-400",
-  };
   return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <p className="text-sm text-muted-foreground">{users.length} pengguna aktif</p>
-        <button className="flex items-center gap-2 bg-primary text-primary-foreground px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-90 transition-all">
-          <Plus className="w-3.5 h-3.5" /> Tambah Pengguna
-        </button>
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <p style={{ fontSize: 13, color: "#94a3b8", margin: 0 }}>{users.length} pengguna aktif</p>
+        <GlassButton><Plus size={14} /> Tambah Pengguna</GlassButton>
       </div>
-      <div className="bg-background border border-border rounded-xl overflow-hidden">
-        <table className="w-full text-sm">
-          <thead><tr className="text-xs text-muted-foreground border-b border-border bg-muted/30">
-            <th className="text-left px-5 py-3 font-medium">Nama</th>
-            <th className="text-left px-4 py-3 font-medium">Username</th>
-            <th className="text-left px-4 py-3 font-medium">Role</th>
-            <th className="px-4 py-3 font-medium">Status</th>
-            <th className="px-5 py-3 font-medium">Aksi</th>
-          </tr></thead>
-          <tbody className="divide-y divide-border">
+      <GlassCard style={{ padding: 0, overflow: "hidden" }}>
+        <table style={{ width: "100%", fontSize: 13, borderCollapse: "collapse" }}>
+          <thead>
+            <tr style={{ background: "rgba(148,163,184,0.08)" }}>
+              {["Nama", "Username", "Role", "Status"].map(h => (
+                <th key={h} style={{ textAlign: "left", padding: "12px 16px", fontSize: 11, fontWeight: 600, textTransform: "uppercase" as const, letterSpacing: "0.05em", color: "#94a3b8", whiteSpace: "nowrap" }}>{h}</th>
+              ))}
+              <th style={{ padding: "12px 16px" }} />
+            </tr>
+          </thead>
+          <tbody>
             {users.map(u => (
-              <tr key={u.id} className="hover:bg-muted/20 transition-colors">
-                <td className="px-5 py-3 font-medium">{u.full_name}</td>
-                <td className="px-4 py-3 text-muted-foreground font-mono text-xs">{u.username}</td>
-                <td className="px-4 py-3">
-                  <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium", ROLE_COLORS[u.role])}>{u.role}</span>
+              <tr key={u.id} style={{ borderBottom: "1px solid rgba(148,163,184,0.08)" }}
+                onMouseEnter={e => { e.currentTarget.style.background = "rgba(226,232,240,0.5)"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+              >
+                <td style={{ padding: "12px 16px", fontWeight: 600, color: "#1e2d40" }}>{u.full_name}</td>
+                <td style={{ padding: "12px 16px", color: "#94a3b8", fontFamily: "'DM Sans', monospace", fontSize: 12 }}>{u.username}</td>
+                <td style={{ padding: "12px 16px" }}>
+                  <GlassBadge type={u.role} />
                 </td>
-                <td className="px-4 py-3 text-center">
+                <td style={{ padding: "12px 16px" }}>
                   {u.status === "ACTIVE"
-                    ? <span className="text-xs bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-full">Aktif</span>
-                    : <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full">Nonaktif</span>}
+                    ? <GlassBadge type="ACTIVE" label="Aktif" />
+                    : <GlassBadge type="INACTIVE" label="Nonaktif" />}
                 </td>
-                <td className="px-5 py-3 text-center">
-                  <button className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"><Edit2 className="w-3.5 h-3.5" /></button>
+                <td style={{ padding: "12px 16px" }}>
+                  <button style={{ padding: "7px 9px", background: "rgba(59,130,246,0.10)", border: "1px solid rgba(59,130,246,0.15)", borderRadius: 8, cursor: "pointer", display: "flex", alignItems: "center", color: "#1e3a5f" }}>
+                    <Edit2 size={14} />
+                  </button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-      </div>
+      </GlassCard>
     </div>
   );
 }
 
 function KonfigurasiTab() {
+  const [saved, setSaved] = useState(false);
   const [currency, setCurrency] = useState("IDR (Rp)");
   const [company, setCompany] = useState("GudangPro Demo");
   const [lowStockAlert, setLowStockAlert] = useState(true);
-  const [saved, setSaved] = useState(false);
+  const [showAlert, setShowAlert] = useState(true);
 
   const handleSave = () => {
     setSaved(true);
@@ -178,40 +169,71 @@ function KonfigurasiTab() {
   };
 
   return (
-    <div className="space-y-4 max-w-lg">
-      <div>
-        <label className="block text-xs font-medium mb-1.5">Nama Perusahaan</label>
-        <input value={company} onChange={e => setCompany(e.target.value)}
-          className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg outline-none focus:ring-2 focus:ring-ring" />
-      </div>
-      <div>
-        <label className="block text-xs font-medium mb-1.5">Mata Uang</label>
-        <select value={currency} onChange={e => setCurrency(e.target.value)}
-          className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg outline-none focus:ring-2 focus:ring-ring">
-          <option>IDR (Rp)</option>
-          <option>USD ($)</option>
-        </select>
-      </div>
-      <div className="flex items-center justify-between py-3 border-t border-border">
+    <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 480 }}>
+      <GlassCard style={{ padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
         <div>
-          <p className="text-sm font-medium">Notifikasi Stok Menipis</p>
-          <p className="text-xs text-muted-foreground">Tampilkan peringatan saat stok di bawah minimum</p>
+          <div style={{ fontSize: 12, fontWeight: 600, color: "#334155", marginBottom: 6 }}>Nama Perusahaan</div>
+          <input
+            value={company}
+            onChange={e => setCompany(e.target.value)}
+            style={{
+              width: "100%", background: "rgba(255,255,255,0.65)", backdropFilter: "blur(16px)",
+              border: "1px solid rgba(255,255,255,0.9)", borderRadius: 12, padding: "10px 14px",
+              fontSize: 13, color: "#1e2d40", fontFamily: "'DM Sans', system-ui, sans-serif",
+              outline: "none", boxSizing: "border-box",
+            }}
+          />
         </div>
-        <button
-          onClick={() => setLowStockAlert(v => !v)}
-          className={cn("w-10 h-6 rounded-full transition-colors relative", lowStockAlert ? "bg-primary" : "bg-muted")}
-        >
-          <span className={cn("absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform",
-            lowStockAlert ? "translate-x-4" : "translate-x-0.5"
-          )} />
-        </button>
-      </div>
-      <button onClick={handleSave}
-        className={cn("flex items-center gap-2 px-4 py-2 text-sm rounded-lg font-medium transition-all",
-          saved ? "bg-emerald-500 text-white" : "bg-primary text-primary-foreground hover:opacity-90"
-        )}>
-        {saved ? <><Check className="w-4 h-4" /> Tersimpan</> : "Simpan Konfigurasi"}
-      </button>
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: "#334155", marginBottom: 6 }}>Mata Uang</div>
+          <select
+            value={currency}
+            onChange={e => setCurrency(e.target.value)}
+            style={{
+              width: "100%", background: "rgba(255,255,255,0.65)", backdropFilter: "blur(16px)",
+              border: "1px solid rgba(255,255,255,0.9)", borderRadius: 12, padding: "10px 14px",
+              fontSize: 13, color: "#1e2d40", fontFamily: "'DM Sans', system-ui, sans-serif",
+              outline: "none", cursor: "pointer", boxSizing: "border-box",
+            }}
+          >
+            <option>IDR (Rp)</option>
+            <option>USD ($)</option>
+          </select>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0", borderTop: "1px solid rgba(148,163,184,0.12)" }}>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "#1e2d40" }}>Notifikasi Stok Menipis</div>
+            <div style={{ fontSize: 12, color: "#94a3b8" }}>Tampilkan peringatan saat stok di bawah minimum</div>
+          </div>
+          <button
+            onClick={() => setShowAlert(v => !v)}
+            style={{
+              width: 44, height: 24, borderRadius: 9999, transition: "background 0.2s ease",
+              background: showAlert ? "linear-gradient(135deg, #1e3a5f, #2d5a9e)" : "rgba(148,163,184,0.25)",
+              border: "none", cursor: "pointer", position: "relative", flexShrink: 0,
+            }}
+          >
+            <div style={{
+              position: "absolute", top: 3, left: showAlert ? 22 : 3,
+              width: 18, height: 18, borderRadius: "50%", background: "#ffffff",
+              boxShadow: "0 1px 4px rgba(0,0,0,0.15)", transition: "left 0.2s ease",
+            }} />
+          </button>
+        </div>
+        <div>
+          <GlassButton
+            variant={saved ? "secondary" : "primary"}
+            onClick={handleSave}
+            style={{ width: "100%", justifyContent: "center" }}
+          >
+            {saved ? (
+              <><Check size={16} /> Tersimpan</>
+            ) : (
+              "Simpan Konfigurasi"
+            )}
+          </GlassButton>
+        </div>
+      </GlassCard>
     </div>
   );
 }
@@ -220,33 +242,59 @@ export default function SettingsPage() {
   const [tab, setTab] = useState<Tab>("gudang");
 
   return (
-    <div className="space-y-5 max-w-4xl mx-auto">
+    <div className="glass-page-enter" style={{ maxWidth: 900, margin: "0 auto", display: "flex", flexDirection: "column", gap: 20 }}>
+      {/* Header */}
       <div>
-        <h2 className="text-xl font-bold">Pengaturan</h2>
-        <p className="text-sm text-muted-foreground mt-0.5">Kelola gudang, mitra, pengguna, dan konfigurasi sistem</p>
+        <h2 style={{ fontSize: 22, fontWeight: 800, color: "#1e2d40", letterSpacing: "-0.3px", margin: "0 0 4px" }}>
+          Pengaturan
+        </h2>
+        <p style={{ fontSize: 13, color: "#94a3b8", margin: 0 }}>
+          Kelola gudang, mitra, pengguna, dan konfigurasi sistem
+        </p>
       </div>
 
-      <div className="flex gap-1 bg-muted/50 p-1 rounded-xl w-fit">
+      {/* Tab pill navigation */}
+      <div style={{
+        display: "flex", gap: 6, padding: "6px", background: "rgba(255,255,255,0.65)",
+        backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)",
+        border: "1px solid rgba(255,255,255,0.9)", borderRadius: 14, width: "fit-content",
+      }}>
         {TABS.map(t => {
           const Icon = t.icon;
+          const active = tab === t.key;
           return (
-            <button key={t.key} onClick={() => setTab(t.key)}
-              className={cn("flex items-center gap-2 px-4 py-2 text-sm rounded-lg transition-colors",
-                tab === t.key ? "bg-card shadow-sm font-medium text-foreground" : "text-muted-foreground hover:text-foreground"
-              )}>
-              <Icon className="w-3.5 h-3.5" />
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              style={{
+                display: "flex", alignItems: "center", gap: 6,
+                padding: "8px 16px", borderRadius: 10,
+                fontSize: 13, fontWeight: active ? 700 : 500,
+                cursor: "pointer",
+                transition: "all 0.15s ease",
+                border: "none",
+                background: active
+                  ? "linear-gradient(135deg, #1e3a5f, #2d5a9e)"
+                  : "transparent",
+                color: active ? "#ffffff" : "#94a3b8",
+                fontFamily: "'DM Sans', system-ui, sans-serif",
+                boxShadow: active ? "0 2px 8px rgba(30,58,95,0.3)" : "none",
+              }}
+            >
+              <Icon size={15} />
               {t.label}
             </button>
           );
         })}
       </div>
 
-      <div className="animate-fade-in-up">
+      {/* Tab content */}
+      <GlassCard style={{ padding: 20 }}>
         {tab === "gudang" && <GudangTab />}
         {tab === "mitra" && <MitraTab />}
         {tab === "pengguna" && <PenggunaTab />}
         {tab === "konfigurasi" && <KonfigurasiTab />}
-      </div>
+      </GlassCard>
     </div>
   );
 }

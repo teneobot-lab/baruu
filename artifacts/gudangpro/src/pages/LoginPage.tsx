@@ -26,7 +26,9 @@ export default function LoginPage() {
       if (!res.ok) {
         setError(data.error ?? "Login gagal");
       } else {
-        setSession(data);
+        const { token: _token, ...sessionData } = data as { token?: string; id: string; username: string; fullName: string; role: string };
+        void _token;
+        setSession(sessionData as Parameters<typeof setSession>[0]);
         navigate("/dashboard");
       }
     } catch {
@@ -37,106 +39,312 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex bg-background">
-      {/* Left panel */}
-      <div className="hidden lg:flex flex-col justify-between w-1/2 bg-sidebar text-sidebar-foreground p-12">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-sidebar-primary rounded-xl flex items-center justify-center">
-            <Warehouse className="w-5 h-5 text-sidebar-primary-foreground" />
+    <div
+      style={{
+        display: "flex",
+        minHeight: "100vh",
+        background: "linear-gradient(135deg, #dde8f5 0%, #e8eef8 40%, #d6e4f0 100%)",
+        fontFamily: "'DM Sans', system-ui, sans-serif",
+        position: "relative",
+      }}
+    >
+      {/* Ambient blobs */}
+      <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 0, pointerEvents: "none", overflow: "hidden" }}>
+        <div style={{ position: "absolute", top: -120, left: -80, width: 500, height: 500, background: "radial-gradient(circle, rgba(147,197,253,0.55) 0%, rgba(147,197,253,0.15) 45%, transparent 70%)", borderRadius: "50%" }} />
+        <div style={{ position: "absolute", bottom: -100, right: 100, width: 420, height: 420, background: "radial-gradient(circle, rgba(196,181,253,0.42) 0%, rgba(196,181,253,0.1) 40%, transparent 65%)", borderRadius: "50%" }} />
+        <div style={{ position: "absolute", top: "40%", right: 20, width: 280, height: 280, background: "radial-gradient(circle, rgba(167,243,208,0.32) 0%, rgba(167,243,208,0.08) 35%, transparent 60%)", borderRadius: "50%" }} />
+      </div>
+
+      {/* Left panel — branding */}
+      <div
+        style={{
+          display: "none",
+          flex: 1,
+          flexDirection: "column",
+          justifyContent: "space-between",
+          padding: "48px 40px",
+          position: "relative",
+          zIndex: 1,
+        }}
+        className="lg:flex"
+      >
+        {/* Logo */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{
+            width: 40,
+            height: 40,
+            background: "linear-gradient(135deg, #1e3a5f, #2d5a9e)",
+            borderRadius: 12,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            boxShadow: "0 4px 12px rgba(30,58,95,0.3)",
+          }}>
+            <Warehouse size={20} color="#ffffff" />
           </div>
-          <span className="font-bold text-xl text-sidebar-accent-foreground">GudangPro</span>
+          <span style={{ fontSize: 20, fontWeight: 800, color: "#1e3a5f", letterSpacing: "-0.3px" }}>
+            GudangPro
+          </span>
         </div>
+
+        {/* Main text */}
         <div>
-          <blockquote className="text-2xl font-semibold text-sidebar-accent-foreground leading-snug mb-4">
+          <blockquote style={{
+            fontSize: 26,
+            fontWeight: 700,
+            color: "#1e3a5f",
+            lineHeight: 1.35,
+            letterSpacing: "-0.4px",
+            margin: "0 0 12px",
+          }}>
             "Kelola stok gudang Anda dengan mudah, cepat, dan akurat."
           </blockquote>
-          <p className="text-sidebar-foreground/60 text-sm">
+          <p style={{ fontSize: 14, color: "#94a3b8", lineHeight: 1.6, margin: 0, maxWidth: 380 }}>
             Sistem Manajemen Inventaris Gudang modern untuk bisnis Indonesia.
           </p>
+
+          {/* Stats */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginTop: 32 }}>
+            {[
+              { value: "Multi", label: "Gudang" },
+              { value: "Real-time", label: "Transaksi" },
+              { value: "Lengkap", label: "Laporan" },
+            ].map(s => (
+              <div key={s.label} style={{
+                background: "rgba(255,255,255,0.72)",
+                backdropFilter: "blur(20px)",
+                WebkitBackdropFilter: "blur(20px)",
+                border: "1px solid rgba(255,255,255,0.9)",
+                borderRadius: "16px",
+                padding: "16px 14px",
+                textAlign: "center",
+              }}>
+                <div style={{ fontSize: 18, fontWeight: 800, color: "#1e3a5f", marginBottom: 2 }}>{s.value}</div>
+                <div style={{ fontSize: 11, color: "#94a3b8", fontWeight: 500 }}>{s.label}</div>
+              </div>
+            ))}
+          </div>
         </div>
-        <div className="grid grid-cols-3 gap-4">
-          {[
-            { label: "Gudang", value: "Multi" },
-            { label: "Transaksi", value: "Real-time" },
-            { label: "Laporan", value: "Lengkap" },
-          ].map(s => (
-            <div key={s.label} className="bg-sidebar-accent/30 rounded-xl p-4">
-              <div className="font-bold text-sidebar-primary text-lg">{s.value}</div>
-              <div className="text-xs text-sidebar-foreground/60">{s.label}</div>
-            </div>
-          ))}
+
+        <div style={{ fontSize: 12, color: "#94a3b8" }}>
+          &copy; {new Date().getFullYear()} GudangPro
         </div>
       </div>
 
-      {/* Right panel */}
-      <div className="flex-1 flex items-center justify-center p-8">
-        <div className="w-full max-w-sm">
+      {/* Right panel — form */}
+      <div
+        style={{
+          flex: 1,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "32px 24px",
+          position: "relative",
+          zIndex: 1,
+        }}
+      >
+        <div
+          style={{
+            width: "100%",
+            maxWidth: 420,
+            background: "rgba(255,255,255,0.88)",
+            backdropFilter: "blur(24px)",
+            WebkitBackdropFilter: "blur(24px)",
+            border: "1px solid rgba(255,255,255,0.95)",
+            borderRadius: "24px",
+            boxShadow: "0 8px 32px rgba(148,163,184,0.22), 0 2px 8px rgba(148,163,184,0.12)",
+            padding: "36px 32px",
+          }}
+          className="glass-page-enter"
+        >
           {/* Mobile logo */}
-          <div className="flex lg:hidden items-center gap-2 mb-8">
-            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-              <Warehouse className="w-4 h-4 text-primary-foreground" />
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 28 }} className="lg:hidden">
+            <div style={{
+              width: 36,
+              height: 36,
+              background: "linear-gradient(135deg, #1e3a5f, #2d5a9e)",
+              borderRadius: 10,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}>
+              <Warehouse size={18} color="#ffffff" />
             </div>
-            <span className="font-bold text-lg">GudangPro</span>
+            <span style={{ fontSize: 18, fontWeight: 800, color: "#1e3a5f", letterSpacing: "-0.3px" }}>
+              GudangPro
+            </span>
           </div>
 
-          <h2 className="text-2xl font-bold mb-1">Masuk ke Sistem</h2>
-          <p className="text-muted-foreground text-sm mb-8">
+          <h2 style={{
+            fontSize: 24,
+            fontWeight: 800,
+            color: "#1e2d40",
+            letterSpacing: "-0.4px",
+            margin: "0 0 4px",
+          }}>
+            Masuk ke Sistem
+          </h2>
+          <p style={{ fontSize: 13, color: "#94a3b8", margin: "0 0 28px" }}>
             Masukkan kredensial Anda untuk melanjutkan.
           </p>
 
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-1.5">Username</label>
+          <form onSubmit={handleLogin} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {/* Username */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+              <label htmlFor="username" style={{ fontSize: 12, fontWeight: 600, color: "#334155", letterSpacing: "0.01em" }}>
+                Username
+              </label>
               <input
+                id="username"
                 value={username}
                 onChange={e => setUsername(e.target.value)}
                 placeholder="Masukkan username"
                 required
-                className="w-full px-3 py-2 bg-card border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-ring transition-shadow placeholder:text-muted-foreground"
+                autoComplete="username"
+                style={{
+                  background: "rgba(255,255,255,0.65)",
+                  backdropFilter: "blur(16px)",
+                  WebkitBackdropFilter: "blur(16px)",
+                  border: "1px solid rgba(255,255,255,0.9)",
+                  borderRadius: 12,
+                  padding: "11px 14px",
+                  fontSize: 13,
+                  color: "#1e2d40",
+                  fontFamily: "'DM Sans', system-ui, sans-serif",
+                  outline: "none",
+                  width: "100%",
+                  boxSizing: "border-box",
+                  transition: "border-color 0.15s ease, box-shadow 0.15s ease",
+                }}
+                onFocus={e => { e.currentTarget.style.borderColor = "rgba(59,130,246,0.5)"; e.currentTarget.style.boxShadow = "0 0 0 3px rgba(59,130,246,0.08)"; }}
+                onBlur={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.9)"; e.currentTarget.style.boxShadow = "none"; }}
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium mb-1.5">Password</label>
-              <div className="relative">
+
+            {/* Password */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+              <label htmlFor="password" style={{ fontSize: 12, fontWeight: 600, color: "#334155", letterSpacing: "0.01em" }}>
+                Password
+              </label>
+              <div style={{ position: "relative" }}>
                 <input
+                  id="password"
                   type={showPw ? "text" : "password"}
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   placeholder="Masukkan password"
                   required
-                  className="w-full px-3 py-2 pr-10 bg-card border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-ring transition-shadow placeholder:text-muted-foreground"
+                  autoComplete="current-password"
+                  style={{
+                    background: "rgba(255,255,255,0.65)",
+                    backdropFilter: "blur(16px)",
+                    WebkitBackdropFilter: "blur(16px)",
+                    border: "1px solid rgba(255,255,255,0.9)",
+                    borderRadius: 12,
+                    padding: "11px 40px 11px 14px",
+                    fontSize: 13,
+                    color: "#1e2d40",
+                    fontFamily: "'DM Sans', system-ui, sans-serif",
+                    outline: "none",
+                    width: "100%",
+                    boxSizing: "border-box",
+                    transition: "border-color 0.15s ease, box-shadow 0.15s ease",
+                  }}
+                  onFocus={e => { e.currentTarget.style.borderColor = "rgba(59,130,246,0.5)"; e.currentTarget.style.boxShadow = "0 0 0 3px rgba(59,130,246,0.08)"; }}
+                  onBlur={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.9)"; e.currentTarget.style.boxShadow = "none"; }}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPw(v => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  style={{
+                    position: "absolute",
+                    right: 12,
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    background: "transparent",
+                    border: "none",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    color: "#94a3b8",
+                    padding: 4,
+                  }}
                 >
-                  {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
             </div>
+
+            {/* Error */}
             {error && (
-              <div className="bg-destructive/10 text-destructive text-sm px-3 py-2 rounded-lg border border-destructive/20">
+              <div style={{
+                background: "rgba(239,68,68,0.10)",
+                color: "#dc2626",
+                fontSize: 13,
+                fontWeight: 500,
+                padding: "10px 14px",
+                borderRadius: 10,
+                border: "1px solid rgba(239,68,68,0.2)",
+              }}>
                 {error}
               </div>
             )}
+
+            {/* Submit */}
             <button
               type="submit"
               disabled={loading}
-              className="w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground font-medium py-2.5 rounded-lg hover:opacity-90 disabled:opacity-60 transition-all text-sm"
+              style={{
+                width: "100%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
+                background: loading
+                  ? "rgba(30,58,95,0.7)"
+                  : "linear-gradient(135deg, #1e3a5f, #2d5a9e)",
+                color: "#ffffff",
+                border: "none",
+                borderRadius: 12,
+                padding: "12px",
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: loading ? "not-allowed" : "pointer",
+                fontFamily: "'DM Sans', system-ui, sans-serif",
+                boxShadow: "0 2px 12px rgba(30,58,95,0.35)",
+                transition: "all 0.18s ease",
+                letterSpacing: "0.01em",
+              }}
             >
-              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+              {loading && <Loader2 size={16} style={{ animation: "spin 1s linear infinite" }} />}
               {loading ? "Memproses..." : "Masuk"}
             </button>
           </form>
 
-          <div className="mt-6 p-3 bg-muted/50 rounded-lg border border-border text-xs text-muted-foreground space-y-1">
-            <p className="font-medium text-foreground">Demo Login:</p>
-            <p>Admin: <code className="bg-background px-1 rounded">admin</code> / <code className="bg-background px-1 rounded">admin123</code></p>
-            <p>Manager: <code className="bg-background px-1 rounded">manager</code> / <code className="bg-background px-1 rounded">manager123</code></p>
+          {/* Demo credentials */}
+          <div style={{
+            marginTop: 20,
+            padding: "12px 14px",
+            background: "rgba(148,163,184,0.08)",
+            borderRadius: 12,
+            border: "1px solid rgba(148,163,184,0.15)",
+            fontSize: 12,
+            color: "#94a3b8",
+            lineHeight: 1.7,
+          }}>
+            <p style={{ fontWeight: 600, color: "#334155", margin: "0 0 4px" }}>Demo Login:</p>
+            <p>Admin: <code style={{ background: "rgba(148,163,184,0.12)", padding: "1px 6px", borderRadius: 4, fontFamily: "'DM Sans', monospace", color: "#1e3a5f" }}>admin</code> / <code style={{ background: "rgba(148,163,184,0.12)", padding: "1px 6px", borderRadius: 4, fontFamily: "'DM Sans', monospace", color: "#1e3a5f" }}>admin123</code></p>
+            <p>Manager: <code style={{ background: "rgba(148,163,184,0.12)", padding: "1px 6px", borderRadius: 4, fontFamily: "'DM Sans', monospace", color: "#1e3a5f" }}>manager</code> / <code style={{ background: "rgba(148,163,184,0.12)", padding: "1px 6px", borderRadius: 4, fontFamily: "'DM Sans', monospace", color: "#1e3a5f" }}>manager123</code></p>
           </div>
         </div>
       </div>
+
+      <style>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 }

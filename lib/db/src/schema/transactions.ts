@@ -34,7 +34,18 @@ export const transactionItemsTable = pgTable("transaction_items", {
   note: text("note"),
 });
 
-export const insertTransactionSchema = createInsertSchema(transactionsTable).omit({ createdAt: true });
+const itemInputSchema = z.object({
+  itemId: z.string(),
+  qty: z.number(),
+  unit: z.string(),
+  conversionRatio: z.number().default(1),
+  baseQty: z.number().optional(),
+  note: z.string().nullish(),
+});
+
+export const insertTransactionSchema = createInsertSchema(transactionsTable)
+  .omit({ createdAt: true })
+  .extend({ items: z.array(itemInputSchema).min(1) });
 export const insertTransactionItemSchema = createInsertSchema(transactionItemsTable);
 export type InsertTransaction = z.infer<typeof insertTransactionSchema>;
 export type InsertTransactionItem = z.infer<typeof insertTransactionItemSchema>;

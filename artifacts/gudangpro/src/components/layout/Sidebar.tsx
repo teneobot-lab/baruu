@@ -1,105 +1,83 @@
 import React, { useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
-import { cn, getInitials } from "@/lib/utils";
+import { getInitials } from "@/lib/utils";
 import {
   LayoutDashboard, Package, ArrowLeftRight, AlertTriangle,
-  Settings, ChevronDown, Music2, LogOut, Warehouse,
-  BarChart3, X, Menu
+  Settings, Warehouse, Bell, X, Menu, ChevronRight,
 } from "lucide-react";
+import { AmbientBlobs } from "@/components/ui/AmbientBlobs";
 
-interface NavItem {
+interface NavItemDef {
   label: string;
   icon: React.ElementType;
   href: string;
-  children?: { label: string; href: string }[];
 }
 
-const navItems: NavItem[] = [
-  { label: "Dashboard", icon: LayoutDashboard, href: "/dashboard" },
-  {
-    label: "Inventaris", icon: Package, href: "/inventory",
-    children: [
-      { label: "Daftar Barang", href: "/inventory" },
-      { label: "Stok per Gudang", href: "/inventory/stok" },
-    ]
-  },
-  {
-    label: "Transaksi", icon: ArrowLeftRight, href: "/transaksi",
-    children: [
-      { label: "Semua Transaksi", href: "/transaksi" },
-      { label: "Barang Masuk", href: "/transaksi/masuk" },
-      { label: "Barang Keluar", href: "/transaksi/keluar" },
-      { label: "Transfer", href: "/transaksi/transfer" },
-      { label: "Penyesuaian", href: "/transaksi/penyesuaian" },
-    ]
-  },
-  { label: "Reject", icon: AlertTriangle, href: "/reject" },
-  { label: "Laporan", icon: BarChart3, href: "/laporan" },
-  { label: "Pengaturan", icon: Settings, href: "/pengaturan" },
+const navItems: NavItemDef[] = [
+  { label: "Dashboard",   icon: LayoutDashboard, href: "/dashboard" },
+  { label: "Inventaris",   icon: Package,        href: "/inventory" },
+  { label: "Transaksi",   icon: ArrowLeftRight, href: "/transaksi" },
+  { label: "Reject",       icon: AlertTriangle,  href: "/reject" },
+  { label: "Pengaturan",   icon: Settings,      href: "/pengaturan" },
 ];
 
-function NavLink({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
-  const [location, navigate] = useLocation();
-  const isActive = location === item.href || location.startsWith(item.href + "/");
-  const [open, setOpen] = useState(isActive);
+function NavButton({
+  item,
+  isActive,
+  collapsed,
+  onClick,
+}: {
+  item: NavItemDef;
+  isActive: boolean;
+  collapsed: boolean;
+  onClick: () => void;
+}) {
   const Icon = item.icon;
-
-  if (item.children) {
-    return (
-      <div>
-        <button
-          onClick={() => setOpen(o => !o)}
-          className={cn(
-            "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors",
-            isActive
-              ? "bg-sidebar-accent text-sidebar-accent-foreground"
-              : "text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
-          )}
-        >
-          <Icon className="shrink-0 w-4 h-4" />
-          {!collapsed && (
-            <>
-              <span className="flex-1 text-left">{item.label}</span>
-              <ChevronDown className={cn("w-3 h-3 transition-transform", open && "rotate-180")} />
-            </>
-          )}
-        </button>
-        {open && !collapsed && (
-          <div className="mt-1 ml-7 space-y-0.5">
-            {item.children.map(child => (
-              <button
-                key={child.href}
-                onClick={() => navigate(child.href)}
-                className={cn(
-                  "w-full text-left px-3 py-1.5 rounded-lg text-xs transition-colors",
-                  location === child.href
-                    ? "text-sidebar-primary font-medium"
-                    : "text-sidebar-foreground/70 hover:text-sidebar-foreground"
-                )}
-              >
-                {child.label}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  }
-
   return (
     <button
-      onClick={() => navigate(item.href)}
-      className={cn(
-        "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors",
-        isActive
-          ? "bg-sidebar-primary text-sidebar-primary-foreground"
-          : "text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
-      )}
-      title={collapsed ? item.label : undefined}
+      onClick={onClick}
+      title={item.label}
+      style={{
+        width: "100%",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 5,
+        padding: "10px 0",
+        border: "none",
+        background: isActive ? "rgba(30,58,95,0.10)" : "transparent",
+        borderRadius: 12,
+        cursor: "pointer",
+        position: "relative",
+        transition: "background 0.18s ease",
+        color: isActive ? "#1e3a5f" : "#94a3b8",
+        outline: "none",
+      }}
     >
-      <Icon className="shrink-0 w-4 h-4" />
-      {!collapsed && <span>{item.label}</span>}
+      {/* Active left bar */}
+      {isActive && (
+        <div style={{
+          position: "absolute",
+          left: 0,
+          top: "20%",
+          height: "60%",
+          width: 3,
+          background: "#1e3a5f",
+          borderRadius: "0 3px 3px 0",
+        }} />
+      )}
+      <Icon size={20} style={{ color: isActive ? "#1e3a5f" : "#94a3b8", transition: "color 0.18s" }} />
+      {!collapsed && (
+        <span style={{
+          fontSize: 11,
+          fontWeight: isActive ? 600 : 500,
+          color: isActive ? "#1e3a5f" : "#94a3b8",
+          letterSpacing: "0.01em",
+        }}>
+          {item.label}
+        </span>
+      )}
     </button>
   );
 }
@@ -107,7 +85,7 @@ function NavLink({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
 export function Sidebar() {
   const { session, setSession } = useAuth();
   const [, navigate] = useLocation();
-  const [collapsed, setCollapsed] = useState(false);
+  const [location] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const handleLogout = () => {
@@ -115,69 +93,123 @@ export function Sidebar() {
     navigate("/login");
   };
 
+  const sidebarStyle: React.CSSProperties = {
+    width: 64,
+    flexShrink: 0,
+    display: "flex",
+    flexDirection: "column",
+    height: "100vh",
+    background: "rgba(255,255,255,0.55)",
+    backdropFilter: "blur(24px)",
+    WebkitBackdropFilter: "blur(24px)",
+    borderRight: "1px solid rgba(255,255,255,0.9)",
+    overflow: "hidden",
+    position: "relative",
+    zIndex: 10,
+  };
+
   const sidebarContent = (
-    <div className={cn("flex flex-col h-full bg-sidebar text-sidebar-foreground", collapsed ? "w-14" : "w-56")}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", padding: "0 8px" }}>
       {/* Logo */}
-      <div className="flex items-center gap-3 px-4 py-4 border-b border-sidebar-border shrink-0">
-        <div className="w-7 h-7 bg-sidebar-primary rounded-lg flex items-center justify-center shrink-0">
-          <Warehouse className="w-4 h-4 text-sidebar-primary-foreground" />
+      <div style={{
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        padding: "16px 0 12px",
+        borderBottom: "1px solid rgba(148,163,184,0.18)",
+        marginBottom: 8,
+        flexShrink: 0,
+      }}>
+        <div style={{
+          width: 36,
+          height: 36,
+          background: "#1e3a5f",
+          borderRadius: 10,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}>
+          <Warehouse size={18} color="#ffffff" />
         </div>
-        {!collapsed && (
-          <div className="min-w-0">
-            <div className="font-bold text-base leading-none text-sidebar-accent-foreground">GudangPro</div>
-            <div className="text-[10px] text-sidebar-foreground/50 mt-0.5">Manajemen Inventaris</div>
-          </div>
-        )}
-        <button
-          onClick={() => setCollapsed(c => !c)}
-          className="ml-auto text-sidebar-foreground/40 hover:text-sidebar-foreground transition-colors hidden md:block"
-        >
-          <Menu className="w-4 h-4" />
-        </button>
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 overflow-y-auto sidebar-scroll p-2 space-y-1">
-        {navItems.map(item => (
-          <NavLink key={item.href} item={item} collapsed={collapsed} />
-        ))}
+      <nav style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2, overflowY: "auto" }}>
+        {navItems.map(item => {
+          const isActive = location === item.href || location.startsWith(item.href + "/");
+          return (
+            <NavButton
+              key={item.href}
+              item={item}
+              isActive={isActive}
+              collapsed={true}
+              onClick={() => navigate(item.href)}
+            />
+          );
+        })}
       </nav>
 
-      {/* Music Player link */}
-      {!collapsed && (
-        <div className="px-2 pb-2">
-          <button
-            onClick={() => navigate("/music")}
-            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent/30 transition-colors"
-          >
-            <Music2 className="w-3.5 h-3.5" />
-            <span>Pemutar Musik</span>
-          </button>
-        </div>
-      )}
+      {/* Divider */}
+      <div style={{ height: 1, background: "rgba(148,163,184,0.18)", margin: "8px 0" }} />
 
-      {/* User */}
-      <div className="px-2 pb-3 pt-2 border-t border-sidebar-border shrink-0">
-        <div className={cn("flex items-center gap-2 px-2 py-2 rounded-lg", collapsed && "justify-center")}>
-          <div className="w-7 h-7 rounded-full bg-sidebar-primary/20 text-sidebar-primary flex items-center justify-center text-xs font-bold shrink-0">
-            {getInitials(session?.fullName ?? "U")}
-          </div>
-          {!collapsed && (
-            <div className="flex-1 min-w-0">
-              <div className="text-xs font-medium text-sidebar-accent-foreground truncate">{session?.fullName}</div>
-              <div className="text-[10px] text-sidebar-foreground/50">{session?.role}</div>
-            </div>
-          )}
-          {!collapsed && (
-            <button
-              onClick={handleLogout}
-              className="text-sidebar-foreground/40 hover:text-red-400 transition-colors"
-              title="Keluar"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-            </button>
-          )}
+      {/* User + Bell */}
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, padding: "12px 0 16px", flexShrink: 0 }}>
+        {/* Bell notification dot */}
+        <div style={{ position: "relative", cursor: "pointer" }}>
+          <Bell size={18} color="#94a3b8" />
+          <div style={{
+            position: "absolute",
+            top: -2,
+            right: -2,
+            width: 7,
+            height: 7,
+            background: "#ef4444",
+            borderRadius: "50%",
+            border: "1.5px solid rgba(255,255,255,0.9)",
+          }} />
         </div>
+
+        {/* Avatar */}
+        <div style={{
+          width: 34,
+          height: 34,
+          borderRadius: "50%",
+          background: "linear-gradient(135deg, #60a5fa, #818cf8)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: 12,
+          fontWeight: 700,
+          color: "#ffffff",
+          letterSpacing: "0.02em",
+          boxShadow: "0 2px 8px rgba(96,165,250,0.4)",
+          cursor: "pointer",
+        }}>
+          {getInitials(session?.fullName ?? "U")}
+        </div>
+
+        {/* Logout */}
+        <button
+          onClick={handleLogout}
+          title="Keluar"
+          style={{
+            background: "transparent",
+            border: "none",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            color: "#94a3b8",
+            padding: "4px",
+            borderRadius: 6,
+            transition: "color 0.15s ease",
+          }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+            <polyline points="16 17 21 12 16 7"/>
+            <line x1="21" y1="12" x2="9" y2="12"/>
+          </svg>
+        </button>
       </div>
     </div>
   );
@@ -185,22 +217,146 @@ export function Sidebar() {
   return (
     <>
       {/* Desktop */}
-      <div className="hidden md:flex h-full shrink-0 border-r border-sidebar-border">
+      <div style={sidebarStyle} className="hidden md:flex">
         {sidebarContent}
       </div>
+
       {/* Mobile toggle */}
       <button
-        className="md:hidden fixed top-3 left-3 z-50 bg-sidebar text-sidebar-foreground p-1.5 rounded-lg border border-sidebar-border"
         onClick={() => setMobileOpen(o => !o)}
+        style={{
+          position: "fixed",
+          top: 12,
+          left: 12,
+          zIndex: 50,
+          background: "rgba(255,255,255,0.88)",
+          backdropFilter: "blur(16px)",
+          border: "1px solid rgba(255,255,255,0.9)",
+          borderRadius: 10,
+          padding: "8px 10px",
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          boxShadow: "0 2px 8px rgba(148,163,184,0.15)",
+        }}
+        className="md:hidden"
       >
-        {mobileOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+        {mobileOpen ? <X size={16} color="#1e3a5f" /> : <Menu size={16} color="#1e3a5f" />}
       </button>
-      {/* Mobile sidebar */}
+
+      {/* Mobile sidebar overlay */}
       {mobileOpen && (
-        <div className="md:hidden fixed inset-0 z-40 flex">
-          <div className="flex-1" onClick={() => setMobileOpen(false)} />
-          <div className="absolute left-0 top-0 h-full">
-            {sidebarContent}
+        <div style={{
+          position: "fixed",
+          inset: 0,
+          zIndex: 40,
+          display: "flex",
+        }}>
+          <div
+            onClick={() => setMobileOpen(false)}
+            style={{ flex: 1, background: "rgba(0,0,0,0.2)", backdropFilter: "blur(4px)" }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              left: 0,
+              top: 0,
+              height: "100%",
+              ...sidebarStyle,
+              width: 240,
+              boxShadow: "4px 0 20px rgba(0,0,0,0.1)",
+            }}
+          >
+            {/* Expanded nav for mobile */}
+            <div style={{ display: "flex", flexDirection: "column", height: "100%", padding: "0 12px" }}>
+              {/* Logo + close */}
+              <div style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "16px 0 12px",
+                borderBottom: "1px solid rgba(148,163,184,0.18)",
+                marginBottom: 8,
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{
+                    width: 36,
+                    height: 36,
+                    background: "#1e3a5f",
+                    borderRadius: 10,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}>
+                    <Warehouse size={18} color="#ffffff" />
+                  </div>
+                  <span style={{ fontSize: 16, fontWeight: 700, color: "#1e3a5f", letterSpacing: "-0.3px" }}>
+                    GudangPro
+                  </span>
+                </div>
+                <button
+                  onClick={() => setMobileOpen(false)}
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    cursor: "pointer",
+                    color: "#94a3b8",
+                    padding: 4,
+                    display: "flex",
+                    alignItems: "center",
+                  }}
+                >
+                  <ChevronRight size={18} />
+                </button>
+              </div>
+
+              <nav style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
+                {navItems.map(item => {
+                  const isActive = location === item.href || location.startsWith(item.href + "/");
+                  return (
+                    <NavButton
+                      key={item.href}
+                      item={item}
+                      isActive={isActive}
+                      collapsed={false}
+                      onClick={() => { navigate(item.href); setMobileOpen(false); }}
+                    />
+                  );
+                })}
+              </nav>
+
+              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 0", borderTop: "1px solid rgba(148,163,184,0.18)" }}>
+                <div style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: "50%",
+                  background: "linear-gradient(135deg, #60a5fa, #818cf8)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 12,
+                  fontWeight: 700,
+                  color: "#ffffff",
+                  flexShrink: 0,
+                }}>
+                  {getInitials(session?.fullName ?? "U")}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#1e2d40" }}>
+                    {session?.fullName}
+                  </div>
+                  <div style={{ fontSize: 11, color: "#94a3b8" }}>{session?.role}</div>
+                </div>
+                <button onClick={handleLogout} style={{ background: "transparent", border: "none", cursor: "pointer", color: "#94a3b8" }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                    <polyline points="16 17 21 12 16 7"/>
+                    <line x1="21" y1="12" x2="9" y2="12"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

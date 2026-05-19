@@ -1,7 +1,14 @@
 import React, { useState } from "react";
-import { Package, Plus, Search, Filter, Edit2, Trash2, ChevronDown, AlertTriangle } from "lucide-react";
+import { Package, Plus, Search, Edit2, Trash2, AlertTriangle } from "lucide-react";
 import { formatNumber } from "@/lib/utils";
-import { cn } from "@/lib/utils";
+import { GlassCard } from "@/components/ui/GlassCard";
+import { GlassCardSubtle } from "@/components/ui/GlassCard";
+import { GlassBadge } from "@/components/ui/GlassBadge";
+import { GlassButton } from "@/components/ui/GlassButton";
+import { GlassInput } from "@/components/ui/GlassInput";
+import { GlassSelect } from "@/components/ui/GlassInput";
+import { GlassModal } from "@/components/ui/GlassModal";
+import { GlassConfirmModal } from "@/components/ui/GlassModal";
 
 const CATEGORIES = ["Semua", "Minuman", "Makanan", "Kebersihan", "Elektronik", "Lainnya"];
 
@@ -18,24 +25,14 @@ interface Item {
 }
 
 const MOCK_ITEMS: Item[] = [
-  {
-    id: "item-001", code: "BRG-001", name: "Air Mineral 600ml",
-    category: "Minuman", base_unit: "BOTOL", min_stock: 100, is_active: true, total_stock: 720,
-    units: [{ unit_name: "DUS", conversion_ratio: 24, operator: "*" }]
-  },
-  {
-    id: "item-002", code: "BRG-002", name: "Mie Instant Goreng",
-    category: "Makanan", base_unit: "PCS", min_stock: 50, is_active: true, total_stock: 280,
-    units: [{ unit_name: "DUS", conversion_ratio: 40, operator: "*" }]
-  },
-  {
-    id: "item-003", code: "BRG-003", name: "Sabun Mandi Batang",
-    category: "Kebersihan", base_unit: "BATANG", min_stock: 30, is_active: true, total_stock: 120,
-    units: [{ unit_name: "LUSIN", conversion_ratio: 12, operator: "*" }]
-  },
+  { id: "item-001", code: "BRG-001", name: "Air Mineral 600ml", category: "Minuman", base_unit: "BOTOL", min_stock: 100, is_active: true, total_stock: 720, units: [{ unit_name: "DUS", conversion_ratio: 24, operator: "*" }] },
+  { id: "item-002", code: "BRG-002", name: "Mie Instant Goreng", category: "Makanan", base_unit: "PCS", min_stock: 50, is_active: true, total_stock: 280, units: [{ unit_name: "DUS", conversion_ratio: 40, operator: "*" }] },
+  { id: "item-003", code: "BRG-003", name: "Sabun Mandi Batang", category: "Kebersihan", base_unit: "BATANG", min_stock: 30, is_active: true, total_stock: 120, units: [{ unit_name: "LUSIN", conversion_ratio: 12, operator: "*" }] },
 ];
 
-function ItemModal({ item, onClose, onSave }: {
+function ItemFormModal({
+  item, onClose, onSave,
+}: {
   item?: Partial<Item>;
   onClose: () => void;
   onSave: (data: Partial<Item>) => void;
@@ -49,76 +46,59 @@ function ItemModal({ item, onClose, onSave }: {
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-card border border-border rounded-xl shadow-lg w-full max-w-md">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-          <h3 className="font-semibold">{item?.id ? "Edit Barang" : "Tambah Barang"}</h3>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground">✕</button>
-        </div>
-        <div className="p-6 space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-medium mb-1.5">Kode Barang</label>
-              <input
-                value={form.code}
-                onChange={e => setForm(f => ({ ...f, code: e.target.value }))}
-                className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg outline-none focus:ring-2 focus:ring-ring"
-                placeholder="BRG-001"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium mb-1.5">Satuan Dasar</label>
-              <input
-                value={form.base_unit}
-                onChange={e => setForm(f => ({ ...f, base_unit: e.target.value }))}
-                className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg outline-none focus:ring-2 focus:ring-ring"
-                placeholder="PCS"
-              />
-            </div>
-          </div>
-          <div>
-            <label className="block text-xs font-medium mb-1.5">Nama Barang</label>
-            <input
-              value={form.name}
-              onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-              className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg outline-none focus:ring-2 focus:ring-ring"
-              placeholder="Nama barang..."
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium mb-1.5">Kategori</label>
-            <select
-              value={form.category}
-              onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
-              className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg outline-none focus:ring-2 focus:ring-ring"
-            >
-              {CATEGORIES.slice(1).map(c => <option key={c}>{c}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium mb-1.5">Minimum Stok</label>
-            <input
-              type="number"
-              value={form.min_stock}
-              onChange={e => setForm(f => ({ ...f, min_stock: Number(e.target.value) }))}
-              className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg outline-none focus:ring-2 focus:ring-ring"
-            />
-          </div>
-        </div>
-        <div className="px-6 py-4 border-t border-border flex justify-end gap-2">
-          <button onClick={onClose} className="px-4 py-2 text-sm border border-border rounded-lg hover:bg-accent transition-colors">
-            Batal
-          </button>
-          <button
-            onClick={() => onSave(form)}
-            className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-all"
+    <GlassModal
+      open={true}
+      onClose={onClose}
+      title={item?.id ? "Edit Barang" : "Tambah Barang"}
+      subtitle={item?.id ? "Perbarui detail barang" : "Tambahkan barang baru ke inventaris"}
+      maxWidth={460}
+      footer={
+        <>
+          <GlassButton variant="secondary" onClick={onClose}>Batal</GlassButton>
+          <GlassButton
+            variant="primary"
+            onClick={() => { onSave(form as Item); onClose(); }}
           >
             Simpan
-          </button>
+          </GlassButton>
+        </>
+      }
+    >
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+          <GlassInput
+            label="Kode Barang"
+            value={form.code}
+            onChange={e => setForm(f => ({ ...f, code: e.target.value }))}
+            placeholder="BRG-001"
+          />
+          <GlassInput
+            label="Satuan Dasar"
+            value={form.base_unit}
+            onChange={e => setForm(f => ({ ...f, base_unit: e.target.value }))}
+            placeholder="PCS"
+          />
         </div>
+        <GlassInput
+          label="Nama Barang"
+          value={form.name}
+          onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+          placeholder="Nama barang..."
+        />
+        <GlassSelect
+          label="Kategori"
+          value={form.category}
+          onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
+          options={CATEGORIES.slice(1).map(c => ({ value: c, label: c }))}
+        />
+        <GlassInput
+          label="Minimum Stok"
+          type="number"
+          value={String(form.min_stock)}
+          onChange={e => setForm(f => ({ ...f, min_stock: Number(e.target.value) }))}
+        />
       </div>
-    </div>
+    </GlassModal>
   );
 }
 
@@ -127,6 +107,7 @@ export default function InventoryPage() {
   const [category, setCategory] = useState("Semua");
   const [showModal, setShowModal] = useState(false);
   const [editItem, setEditItem] = useState<Partial<Item> | undefined>();
+  const [deleteTarget, setDeleteTarget] = useState<Item | null>(null);
   const [items, setItems] = useState<Item[]>(MOCK_ITEMS);
 
   const filtered = items.filter(i =>
@@ -138,64 +119,81 @@ export default function InventoryPage() {
     if (editItem?.id) {
       setItems(prev => prev.map(i => i.id === editItem.id ? { ...i, ...data } : i));
     } else {
-      const newItem: Item = {
-        id: `item-${Date.now()}`,
-        total_stock: 0,
-        is_active: true,
-        units: [],
-        ...data,
-      } as Item;
+      const newItem: Item = { id: `item-${Date.now()}`, total_stock: 0, is_active: true, units: [], ...data } as Item;
       setItems(prev => [...prev, newItem]);
     }
-    setShowModal(false);
     setEditItem(undefined);
   };
 
-  const handleDelete = (id: string) => {
-    if (confirm("Hapus barang ini?")) {
-      setItems(prev => prev.filter(i => i.id !== id));
-    }
+  const handleDelete = (item: Item) => {
+    setItems(prev => prev.filter(i => i.id !== item.id));
+    setDeleteTarget(null);
   };
 
   return (
-    <div className="space-y-5 max-w-6xl mx-auto">
+    <div className="glass-page-enter" style={{ maxWidth: 1200, margin: "0 auto", display: "flex", flexDirection: "column", gap: 20 }}>
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div>
-          <h2 className="text-xl font-bold">Daftar Barang</h2>
-          <p className="text-sm text-muted-foreground mt-0.5">{items.length} barang terdaftar</p>
+          <h2 style={{ fontSize: 22, fontWeight: 800, color: "#1e2d40", letterSpacing: "-0.3px", margin: "0 0 4px" }}>
+            Daftar Barang
+          </h2>
+          <p style={{ fontSize: 13, color: "#94a3b8", margin: 0 }}>{items.length} barang terdaftar</p>
         </div>
-        <button
-          onClick={() => { setEditItem(undefined); setShowModal(true); }}
-          className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90 transition-all"
-        >
-          <Plus className="w-4 h-4" />
-          Tambah Barang
-        </button>
+        <GlassButton onClick={() => { setEditItem(undefined); setShowModal(true); }}>
+          <Plus size={16} /> Tambah Barang
+        </GlassButton>
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+        {/* Search */}
+        <div style={{ position: "relative", flex: 1, minWidth: 200 }}>
+          <Search size={16} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Cari nama atau kode barang..."
-            className="w-full pl-9 pr-3 py-2 text-sm bg-card border border-border rounded-lg outline-none focus:ring-2 focus:ring-ring"
+            style={{
+              width: "100%",
+              paddingLeft: 36,
+              background: "rgba(255,255,255,0.65)",
+              backdropFilter: "blur(16px)",
+              WebkitBackdropFilter: "blur(16px)",
+              border: "1px solid rgba(255,255,255,0.9)",
+              borderRadius: 12,
+              padding: "10px 12px 10px 36px",
+              fontSize: 13,
+              color: "#1e2d40",
+              fontFamily: "'DM Sans', system-ui, sans-serif",
+              outline: "none",
+              boxSizing: "border-box",
+            }}
           />
         </div>
-        <div className="flex gap-2 flex-wrap">
+
+        {/* Category pills */}
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           {CATEGORIES.map(c => (
             <button
               key={c}
               onClick={() => setCategory(c)}
-              className={cn(
-                "px-3 py-1.5 text-xs font-medium rounded-lg transition-colors",
-                category === c
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-card border border-border text-muted-foreground hover:text-foreground hover:bg-accent"
-              )}
+              style={{
+                padding: "6px 14px",
+                borderRadius: 9999,
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: "pointer",
+                transition: "all 0.15s ease",
+                border: category === c ? "none" : "1px solid rgba(255,255,255,0.9)",
+                background: category === c
+                  ? "linear-gradient(135deg, #1e3a5f, #2d5a9e)"
+                  : "rgba(255,255,255,0.65)",
+                backdropFilter: "blur(12px)",
+                color: category === c ? "#ffffff" : "#94a3b8",
+                fontFamily: "'DM Sans', system-ui, sans-serif",
+                boxShadow: category === c ? "0 2px 8px rgba(30,58,95,0.25)" : "none",
+              }}
             >
               {c}
             </button>
@@ -204,93 +202,137 @@ export default function InventoryPage() {
       </div>
 
       {/* Table */}
-      <div className="bg-card border border-card-border rounded-xl overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+      <GlassCard style={{ padding: 0, overflow: "hidden" }}>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", fontSize: 13, borderCollapse: "collapse" }}>
             <thead>
-              <tr className="text-xs text-muted-foreground border-b border-border bg-muted/30">
-                <th className="text-left px-5 py-3 font-medium">Kode</th>
-                <th className="text-left px-4 py-3 font-medium">Nama Barang</th>
-                <th className="text-left px-4 py-3 font-medium">Kategori</th>
-                <th className="text-left px-4 py-3 font-medium">Satuan</th>
-                <th className="text-right px-4 py-3 font-medium">Total Stok</th>
-                <th className="text-right px-4 py-3 font-medium">Min. Stok</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-5 py-3 font-medium">Aksi</th>
+              <tr style={{ background: "rgba(148,163,184,0.08)" }}>
+                {["Kode", "Nama Barang", "Kategori", "Satuan", "Total Stok", "Min. Stok", "Status", "Aksi"].map(h => (
+                  <th key={h} style={{
+                    textAlign: h === "Total Stok" || h === "Min. Stok" ? "right" : "left",
+                    padding: "12px 16px",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    textTransform: "uppercase" as const,
+                    letterSpacing: "0.05em",
+                    color: "#94a3b8",
+                    whiteSpace: "nowrap",
+                  }}>{h}</th>
+                ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-border">
-              {filtered.map(item => {
-                const low = item.total_stock <= item.min_stock;
-                return (
-                  <tr key={item.id} className="hover:bg-muted/20 transition-colors stagger-item">
-                    <td className="px-5 py-3">
-                      <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">{item.code}</code>
-                    </td>
-                    <td className="px-4 py-3 font-medium">{item.name}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{item.category}</td>
-                    <td className="px-4 py-3 text-muted-foreground">
-                      <div>{item.base_unit}</div>
-                      {item.units.map(u => (
-                        <div key={u.unit_name} className="text-xs text-muted-foreground/60">
-                          1 {u.unit_name} = {u.conversion_ratio} {item.base_unit}
-                        </div>
-                      ))}
-                    </td>
-                    <td className="px-4 py-3 text-right font-semibold tabular-nums">
-                      <span className={low ? "text-red-500" : ""}>{formatNumber(item.total_stock)}</span>
-                    </td>
-                    <td className="px-4 py-3 text-right text-muted-foreground tabular-nums">{formatNumber(item.min_stock)}</td>
-                    <td className="px-4 py-3">
-                      {low ? (
-                        <span className="inline-flex items-center gap-1 text-xs text-red-600 dark:text-red-400 bg-red-500/10 px-2 py-0.5 rounded-full badge-pulse">
-                          <AlertTriangle className="w-3 h-3" /> Menipis
-                        </span>
-                      ) : (
-                        <span className="inline-flex text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
-                          {item.is_active ? "Aktif" : "Nonaktif"}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-5 py-3">
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => { setEditItem(item); setShowModal(true); }}
-                          className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
-                          title="Edit"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(item.id)}
-                          className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
-                          title="Hapus"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-              {filtered.length === 0 && (
+            <tbody>
+              {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-5 py-12 text-center text-muted-foreground">
-                    <Package className="w-8 h-8 mx-auto mb-2 opacity-40" />
-                    <p>Tidak ada barang ditemukan</p>
+                  <td colSpan={8} style={{ padding: "40px 20px", textAlign: "center", color: "#94a3b8" }}>
+                    <Package size={32} style={{ margin: "0 auto 8px", opacity: 0.4 }} />
+                    <p style={{ margin: 0 }}>Tidak ada barang ditemukan</p>
                   </td>
                 </tr>
+              ) : (
+                filtered.map(item => {
+                  const low = item.total_stock <= item.min_stock;
+                  return (
+                    <tr key={item.id} style={{ borderBottom: "1px solid rgba(148,163,184,0.08)" }}
+                      onMouseEnter={e => { e.currentTarget.style.background = "rgba(226,232,240,0.5)"; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+                    >
+                      <td style={{ padding: "12px 16px" }}>
+                        <code style={{
+                          background: "rgba(148,163,184,0.12)",
+                          padding: "2px 8px",
+                          borderRadius: 6,
+                          fontSize: 12,
+                          fontFamily: "'DM Sans', monospace",
+                          color: "#1e3a5f",
+                        }}>{item.code}</code>
+                      </td>
+                      <td style={{ padding: "12px 16px", fontWeight: 600, color: "#1e2d40" }}>{item.name}</td>
+                      <td style={{ padding: "12px 16px" }}><GlassBadge type={item.category} label={item.category} /></td>
+                      <td style={{ padding: "12px 16px", color: "#94a3b8" }}>
+                        <div>{item.base_unit}</div>
+                        {item.units.map(u => (
+                          <div key={u.unit_name} style={{ fontSize: 11, color: "#94a3b8", opacity: 0.7 }}>
+                            1 {u.unit_name} = {u.conversion_ratio} {item.base_unit}
+                          </div>
+                        ))}
+                      </td>
+                      <td style={{ padding: "12px 16px", textAlign: "right", fontWeight: 800, color: low ? "#dc2626" : "#1e2d40", fontVariantNumeric: "tabular-nums" }}>
+                        {formatNumber(item.total_stock)}
+                      </td>
+                      <td style={{ padding: "12px 16px", textAlign: "right", color: "#94a3b8", fontVariantNumeric: "tabular-nums" }}>
+                        {formatNumber(item.min_stock)}
+                      </td>
+                      <td style={{ padding: "12px 16px" }}>
+                        {low ? (
+                          <GlassBadge type="CRITICAL" label="Menipis" />
+                        ) : (
+                          <GlassBadge type={item.is_active ? "ACTIVE" : "INACTIVE"} />
+                        )}
+                      </td>
+                      <td style={{ padding: "12px 16px" }}>
+                        <div style={{ display: "flex", gap: 4 }}>
+                          <button
+                            onClick={() => { setEditItem(item); setShowModal(true); }}
+                            style={{
+                              padding: "6px 8px",
+                              background: "rgba(59,130,246,0.10)",
+                              border: "1px solid rgba(59,130,246,0.15)",
+                              borderRadius: 8,
+                              cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              color: "#1e3a5f",
+                              transition: "all 0.15s ease",
+                            }}
+                          >
+                            <Edit2 size={14} />
+                          </button>
+                          <button
+                            onClick={() => setDeleteTarget(item)}
+                            style={{
+                              padding: "6px 8px",
+                              background: "rgba(239,68,68,0.10)",
+                              border: "1px solid rgba(239,68,68,0.15)",
+                              borderRadius: 8,
+                              cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              color: "#dc2626",
+                              transition: "all 0.15s ease",
+                            }}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
-      </div>
+      </GlassCard>
 
       {showModal && (
-        <ItemModal
+        <ItemFormModal
           item={editItem}
           onClose={() => { setShowModal(false); setEditItem(undefined); }}
           onSave={handleSave}
+        />
+      )}
+
+      {deleteTarget && (
+        <GlassConfirmModal
+          open={true}
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={() => handleDelete(deleteTarget)}
+          title="Hapus Barang"
+          message={`Yakin ingin menghapus "${deleteTarget.name}"? Tindakan ini tidak dapat dibatalkan.`}
+          confirmLabel="Ya, Hapus"
+          cancelLabel="Batal"
+          danger
         />
       )}
     </div>

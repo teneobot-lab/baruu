@@ -15,6 +15,8 @@ export const usersTable = pgTable("users", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const insertUserSchema = createInsertSchema(usersTable).omit({ createdAt: true });
+export const insertUserSchema = createInsertSchema(usersTable)
+  .omit({ createdAt: true, passwordHash: true })
+  .extend({ password: z.string().min(6) });
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof usersTable.$inferSelect;

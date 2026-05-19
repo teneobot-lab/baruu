@@ -4,38 +4,86 @@ import {
   itemsTable, itemUnitsTable, warehousesTable, partnersTable,
   usersTable, stockTable, systemSettingsTable
 } from "@workspace/db";
-import { eq, inArray, and } from "drizzle-orm";
+import { eq, inArray, and, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
-import * as crypto from "crypto";
+import { insertItemSchema } from "@workspace/db/schema/items";
+import { insertWarehouseSchema } from "@workspace/db/schema/warehouses";
+import { insertPartnerSchema } from "@workspace/db/schema/partners";
+import { insertUserSchema } from "@workspace/db/schema/users";
+import { hashPassword } from "../lib/auth";
+import type { Request, Response } from "express";
+
+// ─── Local type for user update values (matches db schema shape) ───────────────
+type UserUpdate = {
+  username?: string;
+  fullName?: string;
+  role?: "ADMIN" | "MANAGER" | "STAFF";
+  status?: "ACTIVE" | "INACTIVE";
+  passwordHash?: string;
+};
+
+// ─── Pagination helper ─────────────────────────────────────────────────────────
+
+interface PaginationParams {
+  page?: number;
+  limit?: number;
+}
+
+function paginate<T>(data: T[], total: number, page: number, limit: number) {
+  return {
+    data,
+    total,
+    page,
+    totalPages: Math.ceil(total / limit),
+  };
+}
+
+// ─── ITEMS ────────────────────────────────────────────────────────────────────
 
 const router = Router();
 
-function hashPassword(password: string): string {
-  return crypto.createHash("sha256").update(password + "gudangpro_salt").digest("hex");
-}
+router.get("/inventory/items", async (req: Request, res: Response) => {
+  try {
+    const { category, isActive, page = "1", limit = "50" } = req.query;
+    const pageNum = Math.max(1, Number(page));
+    const limitNum = Math.min(200, Math.max(1, Number(limit)));
+    const offset = (pageNum - 1) * limitNum;
 
-// ─── ITEMS ───────────────────────────────────────────────────────────────────
+    // Build conditions — filter in DB, not JS (BUG-3 fix)
+    const conditions = [];
+    if (category) conditions.push(eq(itemsTable.category, category as string));
+    if (isActive !== undefined) conditions.push(eq(itemsTable.isActive, isActive === "true"));
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
-router.get("/inventory/items", async (req, res) => {
-  const { category, isActive } = req.query;
-  const items = await db.select().from(itemsTable)
-    .where(
-      isActive !== undefined
-        ? eq(itemsTable.isActive, isActive === "true")
-        : undefined
-    )
-    .orderBy(itemsTable.name);
+    // Count total
+    const [{ count }] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(itemsTable)
+      .where(whereClause);
 
-  const units = await db.select().from(itemUnitsTable);
-  const unitMap = new Map<string, typeof units>();
-  for (const u of units) {
-    if (!unitMap.has(u.itemId)) unitMap.set(u.itemId, []);
-    unitMap.get(u.itemId)!.push(u);
-  }
+    // Fetch paginated items
+    const items = await db
+      .select()
+      .from(itemsTable)
+      .where(whereClause)
+      .orderBy(itemsTable.name)
+      .limit(limitNum)
+      .offset(offset);
 
-  const result = items
-    .filter(i => !category || i.category === category)
-    .map(item => ({
+    // Fetch units in single query
+    const itemIds = items.map((i) => i.id);
+    const units =
+      itemIds.length > 0
+        ? await db.select().from(itemUnitsTable).where(inArray(itemUnitsTable.itemId, itemIds))
+        : [];
+
+    const unitMap = new Map<string, typeof units>();
+    for (const u of units) {
+      if (!unitMap.has(u.itemId)) unitMap.set(u.itemId, []);
+      unitMap.get(u.itemId)!.push(u);
+    }
+
+    const result = items.map((item) => ({
       id: item.id,
       code: item.code,
       name: item.name,
@@ -44,260 +92,445 @@ router.get("/inventory/items", async (req, res) => {
       minStock: Number(item.minStock),
       isActive: item.isActive,
       createdAt: item.createdAt,
-      conversions: (unitMap.get(item.id) ?? []).map(u => ({
+      conversions: (unitMap.get(item.id) ?? []).map((u) => ({
         unitName: u.unitName,
         conversionRatio: Number(u.conversionRatio),
         operator: u.operator,
       })),
     }));
 
-  return res.json(result);
+    return res.json(paginate(result, Number(count), pageNum, limitNum));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Terjadi kesalahan";
+    return res.status(500).json({ error: message });
+  }
 });
 
-router.post("/inventory/items", async (req, res) => {
-  const { id, code, name, category, baseUnit, minStock, isActive, conversions } = req.body;
-  const itemId = id || randomUUID();
-
-  await db.insert(itemsTable).values({
-    id: itemId, code, name, category, baseUnit,
-    minStock: String(minStock ?? 0),
-    isActive: isActive ?? true,
-  }).onConflictDoUpdate({
-    target: itemsTable.id,
-    set: { code, name, category, baseUnit, minStock: String(minStock ?? 0), isActive: isActive ?? true },
-  });
-
-  if (conversions !== undefined) {
-    await db.delete(itemUnitsTable).where(eq(itemUnitsTable.itemId, itemId));
-    if (Array.isArray(conversions) && conversions.length > 0) {
-      await db.insert(itemUnitsTable).values(
-        conversions.map((c: { unitName: string; conversionRatio: number; operator: "*" | "/" }) => ({
-          itemId,
-          unitName: c.unitName,
-          conversionRatio: String(c.conversionRatio),
-          operator: c.operator ?? "*",
-        }))
-      );
+router.post("/inventory/items", async (req: Request, res: Response) => {
+  try {
+    const parsed = insertItemSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(422).json({ error: "Validasi gagal", details: parsed.error.flatten() });
     }
+
+    const { id, code, name, category, baseUnit, minStock, isActive, conversions } = parsed.data;
+    const itemId = id || randomUUID();
+
+    await db.insert(itemsTable).values({
+      id: itemId,
+      code,
+      name,
+      category,
+      baseUnit,
+      minStock: String(minStock ?? 0),
+      isActive: isActive ?? true,
+    }).onConflictDoUpdate({
+      target: itemsTable.id,
+      set: { code, name, category, baseUnit, minStock: String(minStock ?? 0), isActive: isActive ?? true },
+    });
+
+    if (conversions !== undefined) {
+      await db.delete(itemUnitsTable).where(eq(itemUnitsTable.itemId, itemId));
+      if (Array.isArray(conversions) && conversions.length > 0) {
+        await db.insert(itemUnitsTable).values(
+          conversions.map((c) => ({
+            itemId,
+            unitName: c.unitName,
+            conversionRatio: String(c.conversionRatio),
+            operator: c.operator ?? "*",
+          })),
+        );
+      }
+    }
+
+    const [item] = await db.select().from(itemsTable).where(eq(itemsTable.id, itemId));
+    const units = await db.select().from(itemUnitsTable).where(eq(itemUnitsTable.itemId, itemId));
+
+    return res.json({
+      ...item,
+      minStock: Number(item.minStock),
+      conversions: units.map((u) => ({
+        unitName: u.unitName,
+        conversionRatio: Number(u.conversionRatio),
+        operator: u.operator,
+      })),
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Terjadi kesalahan";
+    return res.status(500).json({ error: message });
   }
-
-  const [item] = await db.select().from(itemsTable).where(eq(itemsTable.id, itemId));
-  const units = await db.select().from(itemUnitsTable).where(eq(itemUnitsTable.itemId, itemId));
-
-  return res.json({
-    ...item,
-    minStock: Number(item.minStock),
-    conversions: units.map(u => ({
-      unitName: u.unitName,
-      conversionRatio: Number(u.conversionRatio),
-      operator: u.operator,
-    })),
-  });
 });
 
-router.get("/inventory/items/:id", async (req, res) => {
-  const { id } = req.params;
-  const [item] = await db.select().from(itemsTable).where(eq(itemsTable.id, id));
-  if (!item) return res.status(404).json({ error: "Barang tidak ditemukan" });
+router.get("/inventory/items/:id", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const [item] = await db.select().from(itemsTable).where(eq(itemsTable.id, id as string));
+    if (!item) return res.status(404).json({ error: "Barang tidak ditemukan" });
 
-  const units = await db.select().from(itemUnitsTable).where(eq(itemUnitsTable.itemId, id));
+    const units = await db.select().from(itemUnitsTable).where(eq(itemUnitsTable.itemId, id as string));
 
-  const stocks = await db
-    .select({
-      warehouseId: stockTable.warehouseId,
-      warehouseName: warehousesTable.name,
-      itemId: stockTable.itemId,
-      qty: stockTable.qty,
-      lastUpdated: stockTable.lastUpdated,
-    })
-    .from(stockTable)
-    .innerJoin(warehousesTable, eq(stockTable.warehouseId, warehousesTable.id))
-    .where(eq(stockTable.itemId, id));
+    const stocks = await db
+      .select({
+        warehouseId: stockTable.warehouseId,
+        warehouseName: warehousesTable.name,
+        itemId: stockTable.itemId,
+        qty: stockTable.qty,
+        lastUpdated: stockTable.lastUpdated,
+      })
+      .from(stockTable)
+      .innerJoin(warehousesTable, eq(stockTable.warehouseId, warehousesTable.id))
+      .where(eq(stockTable.itemId, id as string));
 
-  return res.json({
-    ...item,
-    minStock: Number(item.minStock),
-    conversions: units.map(u => ({
-      unitName: u.unitName,
-      conversionRatio: Number(u.conversionRatio),
-      operator: u.operator,
-    })),
-    stockByWarehouse: stocks.map(s => ({
-      warehouseId: s.warehouseId,
-      warehouseName: s.warehouseName,
-      itemId: s.itemId,
-      itemName: item.name,
-      itemCode: item.code,
-      qty: Number(s.qty),
-      lastUpdated: s.lastUpdated,
-    })),
-    recentMutations: [],
-  });
+    return res.json({
+      ...item,
+      minStock: Number(item.minStock),
+      conversions: units.map((u) => ({
+        unitName: u.unitName,
+        conversionRatio: Number(u.conversionRatio),
+        operator: u.operator,
+      })),
+      stockByWarehouse: stocks.map((s) => ({
+        warehouseId: s.warehouseId,
+        warehouseName: s.warehouseName,
+        itemId: s.itemId,
+        itemName: item.name,
+        itemCode: item.code,
+        qty: Number(s.qty),
+        lastUpdated: s.lastUpdated,
+      })),
+      recentMutations: [],
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Terjadi kesalahan";
+    return res.status(500).json({ error: message });
+  }
 });
 
-router.delete("/inventory/items/:id", async (req, res) => {
-  await db.update(itemsTable).set({ isActive: false }).where(eq(itemsTable.id, req.params.id));
-  return res.json({ success: true });
+router.delete("/inventory/items/:id", async (req: Request, res: Response) => {
+  try {
+    await db.update(itemsTable).set({ isActive: false }).where(eq(itemsTable.id, req.params.id as string));
+    return res.json({ success: true });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Terjadi kesalahan";
+    return res.status(500).json({ error: message });
+  }
 });
 
-router.post("/inventory/items/bulk-delete", async (req, res) => {
-  const { ids } = req.body;
-  if (Array.isArray(ids) && ids.length > 0) {
+router.post("/inventory/items/bulk-delete", async (req: Request, res: Response) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: "ids wajib berupa array non-kosong" });
+    }
     await db.update(itemsTable).set({ isActive: false }).where(inArray(itemsTable.id, ids));
+    return res.json({ success: true });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Terjadi kesalahan";
+    return res.status(500).json({ error: message });
   }
-  return res.json({ success: true });
 });
 
-// ─── WAREHOUSES ───────────────────────────────────────────────────────────────
+// ─── WAREHOUSES ────────────────────────────────────────────────────────────────
 
-router.get("/inventory/warehouses", async (_req, res) => {
-  const warehouses = await db.select().from(warehousesTable).orderBy(warehousesTable.name);
-  return res.json(warehouses);
+router.get("/inventory/warehouses", async (_req: Request, res: Response) => {
+  try {
+    const warehouses = await db.select().from(warehousesTable).orderBy(warehousesTable.name);
+    return res.json(warehouses);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Terjadi kesalahan";
+    return res.status(500).json({ error: message });
+  }
 });
 
-router.post("/inventory/warehouses", async (req, res) => {
-  const { id, name, location, pic, phone, isActive } = req.body;
-  const wId = id || randomUUID();
+router.post("/inventory/warehouses", async (req: Request, res: Response) => {
+  try {
+    const parsed = insertWarehouseSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(422).json({ error: "Validasi gagal", details: parsed.error.flatten() });
+    }
 
-  await db.insert(warehousesTable).values({
-    id: wId, name, location, pic, phone, isActive: isActive ?? true,
-  }).onConflictDoUpdate({
-    target: warehousesTable.id,
-    set: { name, location, pic, phone, isActive: isActive ?? true },
-  });
+    const { id, name, location, pic, phone, isActive } = parsed.data;
+    const wId = id || randomUUID();
 
-  const [w] = await db.select().from(warehousesTable).where(eq(warehousesTable.id, wId));
-  return res.json(w);
+    await db.insert(warehousesTable).values({
+      id: wId,
+      name,
+      location,
+      pic,
+      phone,
+      isActive: isActive ?? true,
+    }).onConflictDoUpdate({
+      target: warehousesTable.id,
+      set: { name, location, pic, phone, isActive: isActive ?? true },
+    });
+
+    const [w] = await db.select().from(warehousesTable).where(eq(warehousesTable.id, wId));
+    return res.json(w);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Terjadi kesalahan";
+    return res.status(500).json({ error: message });
+  }
 });
 
-router.delete("/inventory/warehouses/:id", async (req, res) => {
-  await db.delete(warehousesTable).where(eq(warehousesTable.id, req.params.id));
-  return res.json({ success: true });
+router.delete("/inventory/warehouses/:id", async (req: Request, res: Response) => {
+  try {
+    await db.delete(warehousesTable).where(eq(warehousesTable.id, req.params.id as string));
+    return res.json({ success: true });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Terjadi kesalahan";
+    return res.status(500).json({ error: message });
+  }
 });
 
 // ─── PARTNERS ─────────────────────────────────────────────────────────────────
 
-router.get("/inventory/partners", async (req, res) => {
-  const { type } = req.query;
-  const partners = await db.select().from(partnersTable).orderBy(partnersTable.name);
-  const filtered = type ? partners.filter(p => p.type === type) : partners;
-  return res.json(filtered.map(p => ({ ...p, termDays: p.termDays ?? 0 })));
+router.get("/inventory/partners", async (req: Request, res: Response) => {
+  try {
+    const { type, page = "1", limit = "50" } = req.query;
+    const pageNum = Math.max(1, Number(page));
+    const limitNum = Math.min(200, Math.max(1, Number(limit)));
+    const offset = (pageNum - 1) * limitNum;
+
+    const conditions = [];
+    if (type) conditions.push(eq(partnersTable.type, type as "SUPPLIER" | "CUSTOMER"));
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const [{ count }] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(partnersTable)
+      .where(whereClause);
+
+    const partners = await db
+      .select()
+      .from(partnersTable)
+      .where(whereClause)
+      .orderBy(partnersTable.name)
+      .limit(limitNum)
+      .offset(offset);
+
+    return res.json(
+      paginate(
+        partners.map((p) => ({ ...p, termDays: p.termDays ?? 0 })),
+        Number(count),
+        pageNum,
+        limitNum,
+      ),
+    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Terjadi kesalahan";
+    return res.status(500).json({ error: message });
+  }
 });
 
-router.post("/inventory/partners", async (req, res) => {
-  const { id, type, name, phone, email, address, npwp, termDays } = req.body;
-  const pId = id || randomUUID();
+router.post("/inventory/partners", async (req: Request, res: Response) => {
+  try {
+    const parsed = insertPartnerSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(422).json({ error: "Validasi gagal", details: parsed.error.flatten() });
+    }
 
-  await db.insert(partnersTable).values({
-    id: pId, type, name, phone, email, address, npwp, termDays: termDays ?? 0,
-  }).onConflictDoUpdate({
-    target: partnersTable.id,
-    set: { type, name, phone, email, address, npwp, termDays: termDays ?? 0 },
-  });
+    const { id, type, name, phone, email, address, npwp, termDays } = parsed.data;
+    const pId = id || randomUUID();
 
-  const [p] = await db.select().from(partnersTable).where(eq(partnersTable.id, pId));
-  return res.json({ ...p, termDays: p.termDays ?? 0 });
+    await db.insert(partnersTable).values({
+      id: pId,
+      type,
+      name,
+      phone,
+      email,
+      address,
+      npwp,
+      termDays: termDays ?? 0,
+    }).onConflictDoUpdate({
+      target: partnersTable.id,
+      set: { type, name, phone, email, address, npwp, termDays: termDays ?? 0 },
+    });
+
+    const [p] = await db.select().from(partnersTable).where(eq(partnersTable.id, pId));
+    return res.json({ ...p, termDays: p.termDays ?? 0 });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Terjadi kesalahan";
+    return res.status(500).json({ error: message });
+  }
 });
 
-router.delete("/inventory/partners/:id", async (req, res) => {
-  await db.delete(partnersTable).where(eq(partnersTable.id, req.params.id));
-  return res.json({ success: true });
+router.delete("/inventory/partners/:id", async (req: Request, res: Response) => {
+  try {
+    await db.delete(partnersTable).where(eq(partnersTable.id, req.params.id as string));
+    return res.json({ success: true });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Terjadi kesalahan";
+    return res.status(500).json({ error: message });
+  }
 });
 
 // ─── USERS ────────────────────────────────────────────────────────────────────
 
-router.get("/inventory/users", async (_req, res) => {
-  const users = await db.select({
-    id: usersTable.id,
-    username: usersTable.username,
-    fullName: usersTable.fullName,
-    role: usersTable.role,
-    status: usersTable.status,
-    createdAt: usersTable.createdAt,
-  }).from(usersTable).orderBy(usersTable.fullName);
-  return res.json(users);
-});
-
-router.post("/inventory/users", async (req, res) => {
-  const { id, username, fullName, role, status, password } = req.body;
-  const uId = id || randomUUID();
-
-  if (!id) {
-    // New user — password required
-    if (!password) return res.status(400).json({ error: "Password wajib untuk pengguna baru" });
-    await db.insert(usersTable).values({
-      id: uId, username, fullName, role: role ?? "STAFF",
-      status: status ?? "ACTIVE",
-      passwordHash: hashPassword(password),
-    });
-  } else {
-    // Update
-    const updateData: Record<string, unknown> = { username, fullName, role, status };
-    if (password) updateData.passwordHash = hashPassword(password);
-    await db.update(usersTable).set(updateData as Parameters<typeof db.update>[0]).where(eq(usersTable.id, uId));
+router.get("/inventory/users", async (_req: Request, res: Response) => {
+  try {
+    const users = await db
+      .select({
+        id: usersTable.id,
+        username: usersTable.username,
+        fullName: usersTable.fullName,
+        role: usersTable.role,
+        status: usersTable.status,
+        createdAt: usersTable.createdAt,
+      })
+      .from(usersTable)
+      .orderBy(usersTable.fullName);
+    return res.json(users);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Terjadi kesalahan";
+    return res.status(500).json({ error: message });
   }
-
-  const [u] = await db.select({
-    id: usersTable.id,
-    username: usersTable.username,
-    fullName: usersTable.fullName,
-    role: usersTable.role,
-    status: usersTable.status,
-    createdAt: usersTable.createdAt,
-  }).from(usersTable).where(eq(usersTable.id, uId));
-  return res.json(u);
 });
 
-router.delete("/inventory/users/:id", async (req, res) => {
-  await db.delete(usersTable).where(eq(usersTable.id, req.params.id));
-  return res.json({ success: true });
+router.post("/inventory/users", async (req: Request, res: Response) => {
+  try {
+    const parsed = insertUserSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(422).json({ error: "Validasi gagal", details: parsed.error.flatten() });
+    }
+
+    const { id, username, fullName, role, status, password } = parsed.data;
+
+    if (!id && !password) {
+      return res.status(400).json({ error: "Password wajib untuk pengguna baru" });
+    }
+
+    const uId = id || randomUUID();
+
+    if (!id) {
+      // New user — password required (validated above)
+      const passwordHash = await hashPassword(password!);
+      await db.insert(usersTable).values({
+        id: uId,
+        username,
+        fullName,
+        role: role ?? "STAFF",
+        status: status ?? "ACTIVE",
+        passwordHash,
+      });
+    } else {
+      // Update existing user
+      const updateValues: UserUpdate = {};
+      if (username !== undefined) updateValues.username = username;
+      if (fullName !== undefined) updateValues.fullName = fullName;
+      if (role !== undefined) updateValues.role = role;
+      if (status !== undefined) updateValues.status = status;
+      if (password !== undefined) updateValues.passwordHash = await hashPassword(password);
+      await db.update(usersTable).set(updateValues).where(eq(usersTable.id, uId));
+    }
+
+    const [u] = await db
+      .select({
+        id: usersTable.id,
+        username: usersTable.username,
+        fullName: usersTable.fullName,
+        role: usersTable.role,
+        status: usersTable.status,
+        createdAt: usersTable.createdAt,
+      })
+      .from(usersTable)
+      .where(eq(usersTable.id, uId));
+    return res.json(u);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Terjadi kesalahan";
+    return res.status(500).json({ error: message });
+  }
+});
+
+router.delete("/inventory/users/:id", async (req: Request, res: Response) => {
+  try {
+    await db.delete(usersTable).where(eq(usersTable.id, req.params.id as string));
+    return res.json({ success: true });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Terjadi kesalahan";
+    return res.status(500).json({ error: message });
+  }
 });
 
 // ─── STOCK ────────────────────────────────────────────────────────────────────
 
-router.get("/inventory/stocks", async (req, res) => {
-  const { warehouseId, itemId } = req.query;
+router.get("/inventory/stocks", async (req: Request, res: Response) => {
+  try {
+    const { warehouseId, itemId, page = "1", limit = "50" } = req.query;
+    const pageNum = Math.max(1, Number(page));
+    const limitNum = Math.min(200, Math.max(1, Number(limit)));
+    const offset = (pageNum - 1) * limitNum;
 
-  const stocks = await db
-    .select({
-      warehouseId: stockTable.warehouseId,
-      warehouseName: warehousesTable.name,
-      itemId: stockTable.itemId,
-      itemName: itemsTable.name,
-      itemCode: itemsTable.code,
-      qty: stockTable.qty,
-      lastUpdated: stockTable.lastUpdated,
-    })
-    .from(stockTable)
-    .innerJoin(warehousesTable, eq(stockTable.warehouseId, warehousesTable.id))
-    .innerJoin(itemsTable, eq(stockTable.itemId, itemsTable.id))
-    .where(
-      warehouseId && itemId
-        ? and(eq(stockTable.warehouseId, warehouseId as string), eq(stockTable.itemId, itemId as string))
-        : warehouseId
-        ? eq(stockTable.warehouseId, warehouseId as string)
-        : itemId
-        ? eq(stockTable.itemId, itemId as string)
-        : undefined
+    const conditions = [];
+    if (warehouseId) conditions.push(eq(stockTable.warehouseId, warehouseId as string));
+    if (itemId) conditions.push(eq(stockTable.itemId, itemId as string));
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const [{ count }] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(stockTable)
+      .where(whereClause);
+
+    const stocks = await db
+      .select({
+        warehouseId: stockTable.warehouseId,
+        warehouseName: warehousesTable.name,
+        itemId: stockTable.itemId,
+        itemName: itemsTable.name,
+        itemCode: itemsTable.code,
+        qty: stockTable.qty,
+        lastUpdated: stockTable.lastUpdated,
+      })
+      .from(stockTable)
+      .innerJoin(warehousesTable, eq(stockTable.warehouseId, warehousesTable.id))
+      .innerJoin(itemsTable, eq(stockTable.itemId, itemsTable.id))
+      .where(whereClause)
+      .limit(limitNum)
+      .offset(offset);
+
+    return res.json(
+      paginate(
+        stocks.map((s) => ({ ...s, qty: Number(s.qty) })),
+        Number(count),
+        pageNum,
+        limitNum,
+      ),
     );
-
-  return res.json(stocks.map(s => ({ ...s, qty: Number(s.qty) })));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Terjadi kesalahan";
+    return res.status(500).json({ error: message });
+  }
 });
 
 // ─── SYSTEM CONFIG ────────────────────────────────────────────────────────────
 
-router.get("/inventory/config/:key", async (req, res) => {
-  const [setting] = await db.select().from(systemSettingsTable).where(eq(systemSettingsTable.key, req.params.key));
-  return res.json({ key: req.params.key, value: setting?.value ?? null });
+router.get("/inventory/config/:key", async (req: Request, res: Response) => {
+  try {
+    const [setting] = await db
+      .select()
+      .from(systemSettingsTable)
+      .where(eq(systemSettingsTable.key, req.params.key as string));
+    return res.json({ key: req.params.key, value: setting?.value ?? null });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Terjadi kesalahan";
+    return res.status(500).json({ error: message });
+  }
 });
 
-router.post("/inventory/config", async (req, res) => {
-  const { key, value } = req.body;
-  await db.insert(systemSettingsTable).values({ key, value }).onConflictDoUpdate({
-    target: systemSettingsTable.key,
-    set: { value },
-  });
-  return res.json({ success: true });
+router.post("/inventory/config", async (req: Request, res: Response) => {
+  try {
+    const { key, value } = req.body;
+    if (!key || value === undefined) {
+      return res.status(400).json({ error: "key dan value wajib diisi" });
+    }
+    await db.insert(systemSettingsTable).values({ key, value }).onConflictDoUpdate({
+      target: systemSettingsTable.key,
+      set: { value },
+    });
+    return res.json({ success: true });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Terjadi kesalahan";
+    return res.status(500).json({ error: message });
+  }
 });
 
 export default router;

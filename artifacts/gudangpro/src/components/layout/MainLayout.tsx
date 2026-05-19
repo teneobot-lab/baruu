@@ -3,24 +3,62 @@ import { useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
+import { AmbientBlobs } from "@/components/ui/AmbientBlobs";
 
 export function MainLayout({ children }: { children: React.ReactNode }) {
   const { session } = useAuth();
   const [location] = useLocation();
 
   const isAuth = location === "/login" || !session;
-  if (isAuth) return <>{children}</>;
+  if (isAuth) {
+    return (
+      <div
+        style={{
+          background: "linear-gradient(135deg, #dde8f5 0%, #e8eef8 40%, #d6e4f0 100%)",
+          minHeight: "100vh",
+          position: "relative",
+          fontFamily: "'DM Sans', system-ui, sans-serif",
+        }}
+      >
+        <AmbientBlobs />
+        <div style={{ position: "relative", zIndex: 1 }}>{children}</div>
+      </div>
+    );
+  }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background text-foreground">
-      <Sidebar />
-      <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-        <Topbar />
-        <main className="flex-1 overflow-auto p-4 md:p-6">
-          <div className="animate-fade-in-up">
+    <div
+      style={{
+        background: "linear-gradient(135deg, #dde8f5 0%, #e8eef8 40%, #d6e4f0 100%)",
+        minHeight: "100vh",
+        position: "relative",
+        fontFamily: "'DM Sans', system-ui, sans-serif",
+      }}
+    >
+      <AmbientBlobs />
+      <div
+        style={{
+          display: "flex",
+          height: "100vh",
+          overflow: "hidden",
+          position: "relative",
+          zIndex: 1,
+        }}
+      >
+        <Sidebar />
+        <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0, overflow: "hidden" }}>
+          <Topbar />
+          <main
+            className="glass-page-enter"
+            style={{
+              flex: 1,
+              overflow: "auto",
+              padding: "20px 24px",
+            }}
+          >
             {children}
-          </div>
-        </main>
+          </main>
+        </div>
       </div>
     </div>
   );

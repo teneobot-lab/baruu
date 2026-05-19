@@ -1,262 +1,272 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import {
-  Package, ArrowDown, ArrowUp, ArrowLeftRight, AlertTriangle, Warehouse,
-  TrendingUp, Loader2
+  Package, ArrowDown, ArrowUp, ArrowLeftRight, AlertTriangle, Warehouse, Loader2,
 } from "lucide-react";
 import { formatNumber, formatDate } from "@/lib/utils";
-import { cn } from "@/lib/utils";
+import { apiClient } from "@/lib/api";
+import { GlassCard } from "@/components/ui/GlassCard";
+import { GlassCardSubtle } from "@/components/ui/GlassCard";
+import { GlassBadge } from "@/components/ui/GlassBadge";
+import { GlassCardSkeleton } from "@/components/ui/GlassSkeleton";
+import type {
+  DashboardSummary,
+  TransactionSummary,
+  WarehouseStockSummary,
+  LowStockItem,
+} from "@workspace/api-client-react";
 
-interface DashboardSummary {
-  totalItems: number;
-  totalWarehouses: number;
-  totalPartners: number;
-  totalTransactionsToday: number;
-  totalInToday: number;
-  totalOutToday: number;
-  lowStockCount: number;
-}
-
-interface RecentTx {
-  id: string;
-  referenceNo: string;
-  type: string;
-  date: string;
-  warehouseName: string;
-  partnerName: string | null;
-  itemCount: number;
-}
-
-interface WarehouseStock {
-  warehouseId: string;
-  warehouseName: string;
-  totalItems: number;
-  totalQty: number;
-}
-
-interface LowStockItem {
-  id: string;
-  code: string;
-  name: string;
-  baseUnit: string;
-  minStock: number;
-  currentStock: number;
-}
-
-const TYPE_COLORS: Record<string, string> = {
-  IN: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
-  OUT: "bg-orange-500/10 text-orange-600 dark:text-orange-400",
-  TRANSFER: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
-  ADJUSTMENT: "bg-purple-500/10 text-purple-600 dark:text-purple-400",
-};
 const TYPE_LABELS: Record<string, string> = {
-  IN: "Masuk", OUT: "Keluar", TRANSFER: "Transfer", ADJUSTMENT: "Penyesuaian"
+  IN: "Masuk", OUT: "Keluar", TRANSFER: "Transfer", ADJUSTMENT: "Penyesuaian",
 };
 
-function TypeBadge({ type }: { type: string }) {
-  return (
-    <span className={cn("inline-flex px-2 py-0.5 rounded-full text-xs font-medium", TYPE_COLORS[type] ?? "bg-muted text-muted-foreground")}>
-      {TYPE_LABELS[type] ?? type}
-    </span>
-  );
-}
-
-function StatCard({ label, value, unit, icon: Icon, color, bg, sub }: {
+function StatCard({
+  label, value, unit, icon: Icon, accentColor, section,
+}: {
   label: string; value: number | string; unit: string;
-  icon: React.ElementType; color: string; bg: string; sub: string;
+  icon: React.ElementType; accentColor: string; section: string;
 }) {
   return (
-    <div className="bg-card border border-card-border rounded-xl p-5 flex flex-col gap-3 stagger-item">
-      <div className="flex items-start justify-between">
+    <GlassCard style={{ padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div>
-          <p className="text-xs text-muted-foreground font-medium">{label}</p>
-          <div className="flex items-baseline gap-1.5 mt-1">
-            <span className="text-2xl font-bold">{value}</span>
-            <span className="text-xs text-muted-foreground">{unit}</span>
+          <div style={{
+            fontSize: 11,
+            fontWeight: 600,
+            textTransform: "uppercase" as const,
+            letterSpacing: "0.06em",
+            color: "#94a3b8",
+            marginBottom: 4,
+          }}>
+            {label}
+          </div>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+            <span style={{ fontSize: 28, fontWeight: 800, color: "#1e2d40", letterSpacing: "-0.5px" }}>
+              {value}
+            </span>
+            <span style={{ fontSize: 12, color: "#94a3b8" }}>{unit}</span>
           </div>
         </div>
-        <div className={`${bg} ${color} p-2.5 rounded-lg`}>
-          <Icon className="w-4 h-4" />
+        <div style={{
+          width: 40,
+          height: 40,
+          background: accentColor,
+          borderRadius: 12,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexShrink: 0,
+        }}>
+          <Icon size={18} color="#ffffff" />
         </div>
       </div>
-      <p className="text-xs text-muted-foreground">{sub}</p>
-    </div>
+      <div style={{ fontSize: 12, color: "#94a3b8" }}>{section}</div>
+    </GlassCard>
   );
-}
-
-function useApi<T>(url: string) {
-  const [data, setData] = useState<T | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    fetch(url)
-      .then(r => r.json())
-      .then(d => { if (!cancelled) setData(d); })
-      .catch(e => { if (!cancelled) setError(e.message); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [url]);
-
-  return { data, loading, error };
 }
 
 export default function DashboardPage() {
-  const { data: summary, loading: sLoading } = useApi<DashboardSummary>("/api/dashboard/summary");
-  const { data: recentTx, loading: txLoading } = useApi<RecentTx[]>("/api/dashboard/recent-transactions");
-  const { data: warehouses, loading: whLoading } = useApi<WarehouseStock[]>("/api/dashboard/stock-by-warehouse");
-  const { data: lowStock } = useApi<LowStockItem[]>("/api/dashboard/low-stock");
-
-  const statCards = [
-    {
-      label: "Total Barang",
-      value: sLoading ? "..." : String(summary?.totalItems ?? 0),
-      unit: "SKU",
-      icon: Package,
-      color: "text-blue-500",
-      bg: "bg-blue-500/10",
-      sub: `${summary?.totalWarehouses ?? 0} gudang aktif`,
-    },
-    {
-      label: "Barang Masuk Hari Ini",
-      value: sLoading ? "..." : String(summary?.totalInToday ?? 0),
-      unit: "transaksi",
-      icon: ArrowDown,
-      color: "text-emerald-500",
-      bg: "bg-emerald-500/10",
-      sub: `Total hari ini: ${summary?.totalTransactionsToday ?? 0}`,
-    },
-    {
-      label: "Barang Keluar Hari Ini",
-      value: sLoading ? "..." : String(summary?.totalOutToday ?? 0),
-      unit: "transaksi",
-      icon: ArrowUp,
-      color: "text-orange-500",
-      bg: "bg-orange-500/10",
-      sub: `Mitra: ${summary?.totalPartners ?? 0} terdaftar`,
-    },
-    {
-      label: "Stok Menipis",
-      value: sLoading ? "..." : String(summary?.lowStockCount ?? 0),
-      unit: "item",
-      icon: AlertTriangle,
-      color: "text-red-500",
-      bg: "bg-red-500/10",
-      sub: "Di bawah batas minimum",
-    },
-  ];
+  const { data: summary, isLoading: sLoading } = useQuery<DashboardSummary>({
+    queryKey: ["dashboard", "summary"],
+    queryFn: () => apiClient.get<DashboardSummary>("/api/dashboard/summary"),
+  });
+  const { data: recentTx, isLoading: txLoading } = useQuery<TransactionSummary[]>({
+    queryKey: ["dashboard", "recent-transactions"],
+    queryFn: () => apiClient.get<TransactionSummary[]>("/api/dashboard/recent-transactions"),
+  });
+  const { data: warehouses, isLoading: whLoading } = useQuery<WarehouseStockSummary[]>({
+    queryKey: ["dashboard", "stock-by-warehouse"],
+    queryFn: () => apiClient.get<WarehouseStockSummary[]>("/api/dashboard/stock-by-warehouse"),
+  });
+  const { data: lowStock } = useQuery<LowStockItem[]>({
+    queryKey: ["dashboard", "low-stock"],
+    queryFn: () => apiClient.get<LowStockItem[]>("/api/dashboard/low-stock"),
+  });
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto">
+    <div className="glass-page-enter" style={{ maxWidth: 1200, margin: "0 auto", display: "flex", flexDirection: "column", gap: 24 }}>
+      {/* Header */}
       <div>
-        <h2 className="text-xl font-bold">Selamat Datang 👋</h2>
-        <p className="text-sm text-muted-foreground mt-0.5">Berikut ringkasan aktivitas gudang Anda hari ini.</p>
+        <h2 style={{ fontSize: 22, fontWeight: 800, color: "#1e2d40", letterSpacing: "-0.3px", margin: "0 0 4px" }}>
+          Selamat Datang 👋
+        </h2>
+        <p style={{ fontSize: 13, color: "#94a3b8", margin: 0 }}>
+          Berikut ringkasan aktivitas gudang Anda hari ini.
+        </p>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {statCards.map(s => <StatCard key={s.label} {...s} />)}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
+        <StatCard label="Total Barang" value={sLoading ? "..." : String(summary?.totalItems ?? 0)} unit="SKU" icon={Package} accentColor="rgba(59,130,246,0.85)" section={`${summary?.totalWarehouses ?? 0} gudang aktif`} />
+        <StatCard label="Barang Masuk Hari Ini" value={sLoading ? "..." : String(summary?.totalInToday ?? 0)} unit="transaksi" icon={ArrowDown} accentColor="rgba(16,185,129,0.85)" section={`Total hari ini: ${summary?.totalTransactionsToday ?? 0}`} />
+        <StatCard label="Barang Keluar Hari Ini" value={sLoading ? "..." : String(summary?.totalOutToday ?? 0)} unit="transaksi" icon={ArrowUp} accentColor="rgba(249,115,22,0.85)" section={`Mitra: ${summary?.totalPartners ?? 0} terdaftar`} />
+        <StatCard label="Stok Menipis" value={sLoading ? "..." : String(summary?.lowStockCount ?? 0)} unit="item" icon={AlertTriangle} accentColor="rgba(239,68,68,0.85)" section="Di bawah batas minimum" />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16 }}>
         {/* Recent Transactions */}
-        <div className="lg:col-span-2 bg-card border border-card-border rounded-xl overflow-hidden">
-          <div className="px-5 py-4 border-b border-border flex items-center justify-between">
-            <h3 className="font-semibold text-sm">Transaksi Terbaru</h3>
-            {txLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />}
+        <GlassCard style={{ padding: 0, overflow: "hidden" }}>
+          <div style={{
+            padding: "16px 20px",
+            borderBottom: "1px solid rgba(148,163,184,0.18)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}>
+            <h3 style={{ fontSize: 14, fontWeight: 700, color: "#1e2d40", margin: 0 }}>Transaksi Terbaru</h3>
+            {txLoading && <Loader2 size={14} style={{ animation: "spin 1s linear infinite", color: "#94a3b8" }} />}
           </div>
-          <div className="divide-y divide-border">
-            {(recentTx ?? []).map(t => (
-              <div key={t.id} className="px-5 py-3 flex items-center gap-4">
-                <TypeBadge type={t.type} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium font-mono">{t.referenceNo}</p>
-                  <p className="text-xs text-muted-foreground truncate">
-                    {t.partnerName ?? "—"} · {t.itemCount} item
-                  </p>
-                </div>
-                <div className="text-right shrink-0">
-                  <p className="text-xs text-muted-foreground">{formatDate(t.date)}</p>
-                  <p className="text-xs font-medium">{t.warehouseName}</p>
-                </div>
+          <div>
+            {txLoading ? (
+              <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
+                <GlassCardSkeleton lines={4} />
               </div>
-            ))}
-            {!txLoading && (!recentTx || recentTx.length === 0) && (
-              <div className="px-5 py-8 text-center text-sm text-muted-foreground">
+            ) : (!recentTx || recentTx.length === 0) ? (
+              <div style={{ padding: "32px 20px", textAlign: "center", color: "#94a3b8", fontSize: 13 }}>
                 Belum ada transaksi
               </div>
+            ) : (
+              recentTx.map(t => (
+                <div key={t.id} style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                  padding: "12px 20px",
+                  borderBottom: "1px solid rgba(148,163,184,0.10)",
+                  transition: "background 0.15s ease",
+                }}
+                  onMouseEnter={e => { e.currentTarget.style.background = "rgba(226,232,240,0.5)"; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+                >
+                  <GlassBadge type={t.type} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "#1e2d40", fontFamily: "'DM Sans', monospace" }}>
+                      {t.referenceNo}
+                    </div>
+                    <div style={{ fontSize: 12, color: "#94a3b8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {t.partnerName ?? "—"} · {t.itemCount ?? 0} item
+                    </div>
+                  </div>
+                  <div style={{ textAlign: "right", flexShrink: 0 }}>
+                    <div style={{ fontSize: 12, color: "#94a3b8" }}>{formatDate(t.date)}</div>
+                    <div style={{ fontSize: 12, fontWeight: 500, color: "#334155" }}>{t.warehouseName}</div>
+                  </div>
+                </div>
+              ))
             )}
           </div>
-        </div>
+        </GlassCard>
 
         {/* Warehouses */}
-        <div className="bg-card border border-card-border rounded-xl overflow-hidden">
-          <div className="px-5 py-4 border-b border-border flex items-center justify-between">
-            <h3 className="font-semibold text-sm">Gudang Aktif</h3>
-            {whLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />}
+        <GlassCard style={{ padding: 0, overflow: "hidden" }}>
+          <div style={{
+            padding: "16px 20px",
+            borderBottom: "1px solid rgba(148,163,184,0.18)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}>
+            <h3 style={{ fontSize: 14, fontWeight: 700, color: "#1e2d40", margin: 0 }}>Gudang Aktif</h3>
+            {whLoading && <Loader2 size={14} style={{ animation: "spin 1s linear infinite", color: "#94a3b8" }} />}
           </div>
-          <div className="divide-y divide-border">
-            {(warehouses ?? []).map(w => (
-              <div key={w.warehouseId} className="px-5 py-3 flex items-center gap-3">
-                <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center shrink-0">
-                  <Warehouse className="w-4 h-4 text-primary" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{w.warehouseName}</p>
-                  <p className="text-xs text-muted-foreground">{w.totalItems} SKU</p>
-                </div>
-                <div className="text-right shrink-0">
-                  <span className="text-xs bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-full">Aktif</span>
-                  <p className="text-xs text-muted-foreground mt-0.5 tabular-nums">{formatNumber(w.totalQty)} unit</p>
-                </div>
+          <div>
+            {whLoading ? (
+              <div style={{ padding: 16 }}><GlassCardSkeleton lines={3} /></div>
+            ) : (!warehouses || warehouses.length === 0) ? (
+              <div style={{ padding: "24px 20px", textAlign: "center", color: "#94a3b8", fontSize: 13 }}>
+                Tidak ada gudang
               </div>
-            ))}
-            {!whLoading && (!warehouses || warehouses.length === 0) && (
-              <div className="px-5 py-6 text-center text-sm text-muted-foreground">Tidak ada gudang</div>
+            ) : (
+              warehouses.map(w => (
+                <div key={w.warehouseId} style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                  padding: "12px 20px",
+                  borderBottom: "1px solid rgba(148,163,184,0.10)",
+                }}>
+                  <div style={{
+                    width: 36,
+                    height: 36,
+                    background: "rgba(59,130,246,0.12)",
+                    borderRadius: 10,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                  }}>
+                    <Warehouse size={16} color="#1e3a5f" />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "#1e2d40", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {w.warehouseName}
+                    </div>
+                    <div style={{ fontSize: 12, color: "#94a3b8" }}>{w.totalItems} SKU</div>
+                  </div>
+                  <div style={{ textAlign: "right", flexShrink: 0 }}>
+                    <GlassBadge type="ACTIVE" label="Aktif" />
+                    <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 3 }}>{formatNumber(w.totalQty)} unit</div>
+                  </div>
+                </div>
+              ))
             )}
           </div>
-        </div>
+        </GlassCard>
       </div>
 
       {/* Low Stock Alert */}
       {lowStock && lowStock.length > 0 && (
-        <div className="bg-red-500/5 border border-red-500/20 rounded-xl overflow-hidden">
-          <div className="px-5 py-4 border-b border-red-500/20 flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 text-red-500" />
-            <h3 className="font-semibold text-sm text-red-600 dark:text-red-400">
+        <GlassCard style={{ padding: 0, overflow: "hidden", border: "1px solid rgba(239,68,68,0.2)", boxShadow: "0 4px 24px rgba(239,68,68,0.08)" }}>
+          <div style={{
+            padding: "14px 20px",
+            borderBottom: "1px solid rgba(239,68,68,0.15)",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+          }}>
+            <AlertTriangle size={16} color="#dc2626" />
+            <h3 style={{ fontSize: 13, fontWeight: 700, color: "#dc2626", margin: 0 }}>
               Peringatan Stok Menipis ({lowStock.length} item)
             </h3>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-xs text-muted-foreground border-b border-red-500/10">
-                  <th className="text-left px-5 py-2.5 font-medium">Barang</th>
-                  <th className="text-right px-4 py-2.5 font-medium">Stok Saat Ini</th>
-                  <th className="text-right px-5 py-2.5 font-medium">Min. Stok</th>
+          <table style={{ width: "100%", fontSize: 13 }}>
+            <thead>
+              <tr style={{ borderBottom: "1px solid rgba(239,68,68,0.10)" }}>
+                <th style={{ textAlign: "left", padding: "10px 20px", fontWeight: 600, color: "#94a3b8", fontSize: 11, letterSpacing: "0.04em", textTransform: "uppercase" }}>Barang</th>
+                <th style={{ textAlign: "right", padding: "10px 16px", fontWeight: 600, color: "#94a3b8", fontSize: 11, letterSpacing: "0.04em", textTransform: "uppercase" }}>Stok Saat Ini</th>
+                <th style={{ textAlign: "right", padding: "10px 20px", fontWeight: 600, color: "#94a3b8", fontSize: 11, letterSpacing: "0.04em", textTransform: "uppercase" }}>Min. Stok</th>
+              </tr>
+            </thead>
+            <tbody>
+              {lowStock.map(item => (
+                <tr key={item.id} style={{ borderBottom: "1px solid rgba(239,68,68,0.08)" }}
+                  onMouseEnter={e => { e.currentTarget.style.background = "rgba(239,68,68,0.04)"; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+                >
+                  <td style={{ padding: "10px 20px" }}>
+                    <span style={{ fontWeight: 600, color: "#1e2d40" }}>{item.name}</span>
+                    <span style={{ marginLeft: 8, fontSize: 11, color: "#94a3b8", fontFamily: "'DM Sans', monospace" }}>{item.code}</span>
+                  </td>
+                  <td style={{ padding: "10px 16px", textAlign: "right", fontWeight: 800, color: "#dc2626", fontVariantNumeric: "tabular-nums" }}>
+                    {formatNumber(item.currentStock ?? 0)} {item.baseUnit}
+                  </td>
+                  <td style={{ padding: "10px 20px", textAlign: "right", color: "#94a3b8", fontVariantNumeric: "tabular-nums" }}>
+                    {formatNumber(item.minStock)}
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-red-500/10">
-                {lowStock.map(item => (
-                  <tr key={item.id} className="hover:bg-red-500/5">
-                    <td className="px-5 py-2.5">
-                      <span className="font-medium">{item.name}</span>
-                      <span className="ml-2 text-xs text-muted-foreground font-mono">{item.code}</span>
-                    </td>
-                    <td className="px-4 py-2.5 text-right tabular-nums text-red-600 dark:text-red-400 font-bold">
-                      {formatNumber(item.currentStock)} {item.baseUnit}
-                    </td>
-                    <td className="px-5 py-2.5 text-right tabular-nums text-muted-foreground">
-                      {formatNumber(item.minStock)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+              ))}
+            </tbody>
+          </table>
+        </GlassCard>
       )}
+
+      <style>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 }

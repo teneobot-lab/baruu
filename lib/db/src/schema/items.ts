@@ -23,7 +23,15 @@ export const itemUnitsTable = pgTable("item_units", {
   operator: operatorEnum("operator").default("*").notNull(),
 });
 
-export const insertItemSchema = createInsertSchema(itemsTable).omit({ createdAt: true });
+export const insertItemSchema = createInsertSchema(itemsTable)
+  .omit({ createdAt: true })
+  .extend({
+    conversions: z.array(z.object({
+      unitName: z.string(),
+      conversionRatio: z.number(),
+      operator: z.enum(["*", "/"]).optional(),
+    })).optional(),
+  });
 export const insertItemUnitSchema = createInsertSchema(itemUnitsTable);
 export type InsertItem = z.infer<typeof insertItemSchema>;
 export type InsertItemUnit = z.infer<typeof insertItemUnitSchema>;

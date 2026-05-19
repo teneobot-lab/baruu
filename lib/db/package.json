@@ -4,8 +4,13 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts",
-    "./schema": "./src/schema/index.ts"
+    ".": "./dist/index.ts",
+    "./schema": "./dist/schema/index.ts",
+    "./schema/items": "./dist/schema/items.ts",
+    "./schema/warehouses": "./dist/schema/warehouses.ts",
+    "./schema/partners": "./dist/schema/partners.ts",
+    "./schema/users": "./dist/schema/users.ts",
+    "./schema/transactions": "./dist/schema/transactions.ts"
   },
   "scripts": {
     "push": "drizzle-kit push --config ./drizzle.config.ts",
