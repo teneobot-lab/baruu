@@ -1,4 +1,7 @@
 {
+  "buildCommand": "cd artifacts/gudangpro && pnpm run build",
+  "outputDirectory": "artifacts/gudangpro/dist",
+  "installCommand": "pnpm install",
   "rewrites": [
     {
       "source": "/api/:path*",
