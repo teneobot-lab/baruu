@@ -1,6 +1,6 @@
 {
   "buildCommand": "pnpm --filter @workspace/gudangpro run build",
-  "outputDirectory": "dist/public",
+  "outputDirectory": "artifacts/gudangpro/dist/public",
   "installCommand": "pnpm install",
   "env": {
     "PORT": "3000",
