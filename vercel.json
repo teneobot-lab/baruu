@@ -1,6 +1,6 @@
 {
   "buildCommand": "pnpm --filter @workspace/gudangpro run build",
-  "outputDirectory": "artifacts/gudangpro/dist",
+  "outputDirectory": "artifacts/gudangpro/dist/public",
   "installCommand": "pnpm install",
   "rewrites": [
     {
