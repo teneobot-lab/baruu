@@ -1,0 +1,769 @@
+# PROMPT: Rebuild GudangPro — Inventory Management App
+
+> Gunakan prompt ini untuk membangun ulang aplikasi **GudangPro** (sistem manajemen inventaris gudang) dengan struktur folder yang bersih dan scalable. Salin seluruh isi prompt ini ke AI code generator (Cursor, Claude, ChatGPT, v0, dll).
+
+---
+
+## 📋 RINGKASAN APLIKASI
+
+Bangun aplikasi **GudangPro** — sistem manajemen inventaris gudang berbasis web, full-stack, dengan tampilan mirip software akuntansi Accurate. Aplikasi ini digunakan oleh staf gudang untuk mencatat transaksi barang masuk/keluar, memantau stok, dan membuat laporan mutasi stok.
+
+**Tech Stack:**
+- **Frontend:** React 18 + TypeScript + Vite + Tailwind CSS
+- **Backend:** Node.js + Express.js + MySQL (mysql2/promise)
+- **Library pendukung:** Lucide React (icons), Recharts (grafik), Fuse.js (fuzzy search), jsPDF + jspdf-autotable (export PDF), ExcelJS (export Excel), Decimal.js (presisi angka), UUID
+
+---
+
+## 🗂️ STRUKTUR FOLDER TARGET
+
+```
+gudangpro/
+│
+├── client/                          # Frontend React + TypeScript
+│   ├── index.html
+│   ├── vite.config.ts
+│   ├── tsconfig.json
+│   ├── tailwind.config.js
+│   ├── package.json
+│   │
+│   └── src/
+│       ├── main.tsx                 # Entry point (ReactDOM.render)
+│       ├── App.tsx                  # Root component (layout utama + routing)
+│       │
+│       ├── types/                   # Semua TypeScript interfaces & types
+│       │   ├── index.ts             # Re-export semua types
+│       │   ├── inventory.types.ts   # Item, Stock, Warehouse, Partner
+│       │   ├── transaction.types.ts # Transaction, TransactionItem, TransactionType
+│       │   ├── reject.types.ts      # RejectBatch, RejectItem
+│       │   ├── music.types.ts       # Playlist, Song
+│       │   └── auth.types.ts        # AppUser, Session
+│       │
+│       ├── constants/               # Nilai konstan & konfigurasi UI
+│       │   ├── theme.ts             # THEME object (dark/light tokens)
+│       │   ├── navigation.ts        # TAB_LABELS, NavConfig array
+│       │   └── api.ts               # API_URL, endpoint strings
+│       │
+│       ├── hooks/                   # Custom React hooks (reusable logic)
+│       │   ├── useTheme.ts          # toggle dark/light + persist localStorage
+│       │   ├── useLocalStorage.ts   # Generic localStorage hook
+│       │   ├── useDebounce.ts       # Debounce input value
+│       │   └── useWindowSize.ts     # Responsive breakpoint detection
+│       │
+│       ├── services/                # Semua komunikasi API ke backend
+│       │   ├── api.client.ts        # Base fetch wrapper (apiCall helper)
+│       │   ├── inventory.service.ts # Item, Warehouse, Partner, Stock, User CRUD
+│       │   ├── transaction.service.ts # Transaksi CRUD + filter
+│       │   ├── reject.service.ts    # Reject batch, outlet, master item
+│       │   ├── music.service.ts     # Playlist & song CRUD
+│       │   ├── auth.service.ts      # Login, session management
+│       │   ├── export.service.ts    # Export Excel (ExcelJS) & PDF (jsPDF)
+│       │   └── sync.service.ts      # Sinkronisasi ke Google Sheets
+│       │
+│       ├── contexts/                # React Context providers
+│       │   ├── ThemeContext.tsx      # Theme state + toggleTheme
+│       │   ├── AuthContext.tsx       # currentUser, login, logout
+│       │   ├── ToastContext.tsx      # Global toast notifications
+│       │   └── MasterDataContext.tsx # Items, Warehouses, Partners (global cache)
+│       │
+│       ├── components/
+│       │   ├── layout/              # Komponen kerangka aplikasi
+│       │   │   ├── AppShell.tsx     # Wrapper utama (sidebar + main + topbar)
+│       │   │   ├── Sidebar.tsx      # Sidebar navigasi kiri
+│       │   │   ├── Topbar.tsx       # Header atas (breadcrumb, search, actions)
+│       │   │   └── NavItem.tsx      # Satu item menu di sidebar
+│       │   │
+│       │   ├── ui/                  # Atom/Molekul UI reusable
+│       │   │   ├── Toast.tsx        # Toast notification
+│       │   │   ├── ConfirmDialog.tsx # Modal konfirmasi ya/tidak
+│       │   │   ├── SmartAutocomplete.tsx # Input dengan dropdown autocomplete
+│       │   │   └── AppLogo.tsx      # SVG logo aplikasi
+│       │   │
+│       │   └── widgets/             # Widget fungsional di topbar/sidebar
+│       │       ├── ClockWidget.tsx  # Jam digital realtime
+│       │       ├── LowStockAlert.tsx # Badge notif stok menipis
+│       │       ├── MusicPlayer.tsx  # Embedded YouTube music player
+│       │       └── ThemeToggle.tsx  # Tombol toggle dark/light
+│       │
+│       ├── features/                # Fitur-fitur utama aplikasi (per domain)
+│       │   │
+│       │   ├── auth/
+│       │   │   └── LoginPage.tsx    # Halaman login
+│       │   │
+│       │   ├── dashboard/
+│       │   │   └── DashboardView.tsx # Ringkasan stok, chart, transaksi terkini
+│       │   │
+│       │   ├── inventory/
+│       │   │   └── InventoryView.tsx # Tabel daftar barang + filter + aksi
+│       │   │
+│       │   ├── transactions/
+│       │   │   ├── TransactionForm.tsx # Form transaksi IN/OUT
+│       │   │   └── ReportsView.tsx     # Laporan mutasi stok
+│       │   │
+│       │   ├── reject/
+│       │   │   └── RejectView.tsx   # Pencatatan & laporan barang reject
+│       │   │
+│       │   └── settings/
+│       │       └── SettingsView.tsx # Manajemen gudang, mitra, user, konfigurasi
+│       │
+│       ├── search/                  # Modul pencarian global
+│       │   ├── SearchProvider.tsx   # Context provider data master untuk search
+│       │   ├── GlobalSearch.tsx     # Komponen input search di topbar
+│       │   ├── useFuseSearch.ts     # Hook fuzzy search menggunakan Fuse.js
+│       │   └── highlightMatch.tsx   # Highlight teks yang cocok di hasil search
+│       │
+│       └── utils/                   # Pure helper functions
+│           ├── formatters.ts        # formatDate, formatNumber, formatCurrency
+│           ├── stockCalculator.ts   # Kalkulasi stok, konversi unit
+│           └── validators.ts        # Validasi form, cek duplikat referensi
+│
+└── server/                          # Backend Express.js + MySQL
+    ├── package.json
+    ├── .env.example
+    ├── schema.sql                   # DDL MySQL lengkap
+    │
+    └── src/
+        ├── app.js                   # Setup Express (cors, helmet, morgan, routes)
+        ├── server.js                # Entry point: listen + initDb
+        │
+        ├── config/
+        │   ├── database.js          # MySQL pool (mysql2/promise)
+        │   └── initDb.js            # Auto-create tables jika belum ada
+        │
+        ├── controllers/             # Request handler (validasi input, kirim response)
+        │   ├── auth.controller.js
+        │   ├── inventory.controller.js
+        │   ├── transaction.controller.js
+        │   ├── reject.controller.js
+        │   └── music.controller.js
+        │
+        ├── services/                # Bisnis logic & query DB
+        │   ├── inventory.service.js # CRUD items, warehouses, partners, stock
+        │   └── transaction.service.js # Proses IN/OUT, update stok, revert
+        │
+        ├── routes/
+        │   ├── index.js             # Mount semua sub-router
+        │   ├── auth.routes.js
+        │   ├── inventory.routes.js
+        │   ├── transaction.routes.js
+        │   ├── reject.routes.js
+        │   └── music.routes.js
+        │
+        ├── middlewares/
+        │   ├── errorHandler.js      # Global error middleware
+        │   └── auth.middleware.js   # Validasi session/token
+        │
+        └── tests/
+            └── api_test.sh          # Bash script pengujian endpoint
+```
+
+---
+
+## 🎨 TAMPILAN & UI
+
+### Layout Utama
+- **Sidebar kiri** lebar 224px, background gradient `#1e293b → #1a2332` (selalu dark meski mode light)
+- **Topbar** tinggi 48px, background berubah sesuai tema (`bg-slate-800` dark / `bg-white` light)
+- **Area konten** mengisi sisa layar, bisa di-scroll
+- Sidebar bisa di-toggle (hamburger menu di mobile), otomatis terbuka di desktop (≥1024px)
+- Animasi masuk konten: `fadeIn` + `translateY` ringan 0.2s
+
+### Tema (Dark / Light)
+Simpan token warna dalam objek `THEME` di `client/src/constants/theme.ts`:
+```typescript
+export const THEME = {
+  dark: {
+    pageBg: 'bg-slate-950',
+    topbarBg: 'bg-slate-800',
+    topbarBorder: 'border-slate-700',
+    textPrimary: 'text-slate-200',
+    textSecondary: 'text-slate-400',
+    contentBg: 'bg-slate-900',
+    btnHover: 'hover:bg-slate-700 hover:text-slate-200',
+    avatarBg: 'bg-sky-500/20 border-sky-500/30 text-sky-300',
+    scrollThumb: '#475569',
+  },
+  light: {
+    pageBg: 'bg-slate-50',
+    topbarBg: 'bg-white',
+    topbarBorder: 'border-slate-200',
+    textPrimary: 'text-slate-700',
+    textSecondary: 'text-slate-500',
+    contentBg: 'bg-slate-50',
+    btnHover: 'hover:bg-slate-100 hover:text-slate-700',
+    avatarBg: 'bg-sky-50 border-sky-200 text-sky-600',
+    scrollThumb: '#cbd5e1',
+  },
+} as const;
+```
+
+Tema disimpan ke `localStorage` dengan key `gp_theme`. Sidebar **selalu dark** (tidak berubah saat light mode).
+
+### Navigasi Sidebar
+Struktur menu:
+```
+[Section: Menu Utama]
+  - Dashboard        (icon: LayoutDashboard)
+  - Stok Barang      (icon: Package)
+  - Mutasi Stok      (icon: FileBarChart)
+  - Barang Reject    (icon: AlertOctagon)
+
+[Section: Aplikasi]
+  - Music Player     (buka floating player via CustomEvent)
+
+[Section: Transaksi]
+  - Penerimaan (IN)  — warna emerald
+  - Pengiriman (OUT) — warna rose
+
+[Section: bawah]
+  - Pengaturan
+  - Keluar
+  - User card (nama + role + avatar inisial)
+```
+
+Item aktif: `bg-sky-500/15 text-sky-300 border border-sky-500/25` + dot biru di kanan.
+
+---
+
+## 🔐 FITUR AUTENTIKASI
+
+- Halaman login fullscreen dengan logo + form username & password
+- Credentials divalidasi via `POST /api/auth/login` (cek ke tabel `users` di MySQL, password di-hash bcrypt)
+- Session disimpan ke `localStorage` key `gp_session` (object `{ id, name, role }`)
+- Saat logout: tampilkan overlay loading 800ms dengan animasi pulse + teks "Keluar..."
+- Route protection: jika tidak ada session, tampilkan `<LoginPage />`
+
+---
+
+## 📦 FITUR INVENTORY (Stok Barang)
+
+Halaman tabel barang dengan kolom: Kode, Nama, Kategori, Stok (per gudang), Satuan, Min. Stok, Status.
+
+**Master Item fields:**
+```typescript
+interface Item {
+  id: string;        // UUID
+  code: string;      // Kode unik barang
+  name: string;
+  category: string;
+  baseUnit: string;  // Satuan dasar (misal: PCS, KG)
+  conversions: UnitConversion[]; // Konversi satuan (Lusin = 12 PCS)
+  minStock: number;  // Batas minimum stok
+  isActive: boolean;
+}
+interface UnitConversion {
+  name: string;      // Nama satuan (Lusin, Krat, Dus)
+  ratio: number;     // Angka konversi
+  operator: '*'|'/'; // * = kali, / = bagi
+}
+```
+
+Fitur di halaman inventaris:
+- Filter by kategori, gudang, status aktif/tidak aktif
+- Cari by nama/kode
+- Tambah/Edit/Hapus (modal form)
+- Import dari Excel (template bisa didownload)
+- Export ke Excel
+- Klik baris → buka `StockCardModal` (kartu stok detail per gudang + riwayat mutasi singkat)
+- Tandai item tidak aktif (soft delete)
+
+---
+
+## 💸 FITUR TRANSAKSI
+
+### TransactionForm
+Form transaksi untuk tipe `IN` (Penerimaan) dan `OUT` (Pengiriman):
+
+**Header transaksi:**
+- Tanggal, Nomor Referensi (auto-generate, bisa diedit)
+- Nomor DO (Delivery Order), opsional
+- Gudang Asal (wajib)
+- Mitra (Supplier/Customer, dari tabel partners)
+- Catatan global
+
+**Line item:**
+- Nama barang (autocomplete dari master item)
+- Satuan (dropdown dari conversions barang + baseUnit)
+- Jumlah
+- Catatan per baris
+- Qty otomatis dikonversi ke base unit saat menyimpan
+
+**Validasi:**
+- Stok tidak boleh minus untuk transaksi OUT
+- Nomor referensi harus unik
+- Minimal 1 baris item
+
+**Backend logic (`transaction.service.js`):**
+- Bungkus dalam DB transaction (BEGIN / COMMIT / ROLLBACK)
+- Hitung `base_qty = qty * ratio` (jika operator `*`) atau `qty / ratio` (jika `/`)
+- Update tabel `stock` (INSERT ON DUPLICATE KEY UPDATE)
+- Untuk UPDATE transaksi: revert stok lama dulu, baru proses ulang
+- Untuk DELETE: revert stok ke kondisi sebelum transaksi
+
+---
+
+## 📊 FITUR LAPORAN (Mutasi Stok)
+
+Halaman `ReportsView`:
+- Filter: rentang tanggal, gudang, tipe transaksi (IN/OUT/TRANSFER/ADJUSTMENT), nama barang
+- Tabel mutasi: Tanggal | No. Referensi | Tipe | Gudang | Mitra | Nama Barang | Qty | Satuan | Catatan
+- Baris IN berwarna emerald, OUT berwarna rose
+- Tombol Export PDF (jsPDF + autotable)
+- Tombol Export Excel (ExcelJS)
+- Tombol Edit transaksi (buka kembali TransactionForm dengan data terisi)
+- Tombol Delete transaksi (dengan ConfirmDialog)
+
+---
+
+## ❌ FITUR REJECT
+
+Modul pencatatan barang reject dari outlet/cabang.
+
+**RejectBatch** = satu sesi input reject dari satu outlet:
+```typescript
+interface RejectBatch {
+  id: string;
+  date: string;       // YYYY-MM-DD
+  outlet: string;     // Nama outlet/cabang
+  createdAt: number;
+  items: RejectItem[];
+}
+interface RejectItem {
+  itemId: string;
+  sku: string;
+  name: string;
+  qty: number;
+  unit: string;
+  baseQty: number;    // Selalu dalam satuan dasar
+  reason: string;     // Alasan reject (rusak, kadaluarsa, dll)
+  inputQty?: number;  // Qty asli yang diketik user
+  inputUnit?: string; // Satuan yang dipilih user
+}
+```
+
+Fitur:
+- Tambah/edit/hapus batch
+- Master item reject terpisah dari inventaris utama
+- Master outlet (nama-nama cabang)
+- Export ke Excel per batch atau rekap periode
+- Sinkronisasi ke Google Sheets (via Apps Script URL)
+
+---
+
+## ⚙️ FITUR PENGATURAN (SettingsView)
+
+Tabs di dalam halaman settings:
+1. **Gudang** — CRUD master gudang (nama, lokasi, PIC, telepon, aktif/tidak)
+2. **Mitra** — CRUD supplier & customer (nama, tipe, telepon, email, alamat, NPWP, term pembayaran)
+3. **Pengguna** — CRUD user dengan role ADMIN/MANAGER/STAFF (password di-hash)
+4. **Konfigurasi** — URL Google Sheets Script, pengaturan lainnya
+
+---
+
+## 🎵 FITUR MUSIC PLAYER
+
+- **MusicPlayer** widget mengambang di pojok kanan bawah (minimizable)
+- Buka via `CustomEvent('open-music-player')` dari sidebar
+- Playlist & lagu disimpan di DB (tabel `playlists` dan `songs`)
+- Putar YouTube via `youtube-player` atau iframe embed
+- Fitur: play/pause, next/prev, shuffle, tambah/hapus lagu dari playlist, buat playlist baru
+
+---
+
+## 🔍 FITUR GLOBAL SEARCH
+
+- Input di topbar, shortcut `Ctrl+K` untuk fokus
+- Fuzzy search menggunakan **Fuse.js** pada data master (items, warehouses, partners)
+- Hasil dikelompokkan per kategori: Barang, Gudang, Mitra
+- Highlight teks yang cocok (komponen `highlightMatch`)
+- Klik hasil → buka modal detail item (`StockCardModal`) atau navigasi ke halaman terkait
+- Data dimuat via `MasterDataContext` (di-cache, refresh saat mutasi data)
+
+---
+
+## ⏰ WIDGET TOPBAR
+
+### ClockWidget
+- Tampilkan jam digital HH:MM:SS + tanggal lengkap Bahasa Indonesia
+- Update setiap detik via `setInterval`
+- Format: `Senin, 19 Mei 2026 — 14:30:45`
+
+### LowStockAlert
+- Icon bell dengan badge jumlah item yang stoknya ≤ `minStock`
+- Klik → dropdown list nama barang + stok saat ini
+- Warna badge merah, berkedip jika ada alert
+
+### ThemeToggle
+- Icon Sun (amber) untuk dark mode → klik ganti ke light
+- Icon Moon (slate) untuk light mode → klik ganti ke dark
+- Animasi pop saat toggle
+
+---
+
+## 🗃️ DATABASE SCHEMA (MySQL)
+
+```sql
+-- Users & Auth
+CREATE TABLE users (
+  id CHAR(36) PRIMARY KEY,
+  username VARCHAR(50) NOT NULL UNIQUE,
+  password_hash VARCHAR(255) NOT NULL,
+  full_name VARCHAR(100) NOT NULL,
+  role VARCHAR(20) DEFAULT 'STAFF',  -- ADMIN, MANAGER, STAFF
+  status ENUM('ACTIVE','INACTIVE') DEFAULT 'ACTIVE',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Master Data
+CREATE TABLE warehouses (
+  id CHAR(36) PRIMARY KEY,
+  name VARCHAR(100) NOT NULL,
+  location TEXT,
+  pic VARCHAR(100),
+  phone VARCHAR(20),
+  is_active BOOLEAN DEFAULT TRUE
+);
+
+CREATE TABLE items (
+  id CHAR(36) PRIMARY KEY,
+  code VARCHAR(50) NOT NULL UNIQUE,
+  name VARCHAR(150) NOT NULL,
+  category VARCHAR(50),
+  base_unit VARCHAR(20) NOT NULL,
+  min_stock INT DEFAULT 0,
+  is_active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE item_units (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  item_id CHAR(36) NOT NULL,
+  unit_name VARCHAR(20) NOT NULL,
+  conversion_ratio DECIMAL(10,4) NOT NULL,
+  operator ENUM('*','/') DEFAULT '*',
+  FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE,
+  UNIQUE(item_id, unit_name)
+);
+
+CREATE TABLE partners (
+  id CHAR(36) PRIMARY KEY,
+  type ENUM('SUPPLIER','CUSTOMER') NOT NULL,
+  name VARCHAR(100) NOT NULL,
+  phone VARCHAR(20),
+  email VARCHAR(100),
+  address TEXT,
+  npwp VARCHAR(50),
+  term_days INT DEFAULT 0
+);
+
+-- Stock
+CREATE TABLE stock (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  warehouse_id CHAR(36) NOT NULL,
+  item_id CHAR(36) NOT NULL,
+  qty DECIMAL(15,4) DEFAULT 0,  -- Selalu dalam base unit
+  last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (warehouse_id) REFERENCES warehouses(id),
+  FOREIGN KEY (item_id) REFERENCES items(id),
+  UNIQUE(warehouse_id, item_id)
+);
+
+-- Transactions
+CREATE TABLE transactions (
+  id CHAR(36) PRIMARY KEY,
+  reference_no VARCHAR(50) NOT NULL UNIQUE,
+  type ENUM('IN','OUT','TRANSFER','ADJUSTMENT') NOT NULL,
+  date DATE NOT NULL,
+  source_warehouse_id CHAR(36) NOT NULL,
+  target_warehouse_id CHAR(36),
+  partner_id CHAR(36),
+  partner_name VARCHAR(100),
+  delivery_order_no VARCHAR(50),
+  notes TEXT,
+  created_by CHAR(36),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE transaction_items (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  transaction_id CHAR(36) NOT NULL,
+  item_id CHAR(36) NOT NULL,
+  qty DECIMAL(15,4) NOT NULL,
+  unit VARCHAR(20) NOT NULL,
+  conversion_ratio DECIMAL(10,4) NOT NULL,
+  base_qty DECIMAL(15,4) NOT NULL,
+  note VARCHAR(255),
+  FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE CASCADE,
+  FOREIGN KEY (item_id) REFERENCES items(id)
+);
+
+-- Reject Module
+CREATE TABLE reject_outlets (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(100) NOT NULL UNIQUE
+);
+
+CREATE TABLE reject_items_master (
+  id CHAR(36) PRIMARY KEY,
+  code VARCHAR(50) NOT NULL UNIQUE,
+  name VARCHAR(150) NOT NULL,
+  base_unit VARCHAR(20) NOT NULL
+);
+
+CREATE TABLE reject_item_units (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  item_id CHAR(36) NOT NULL,
+  unit_name VARCHAR(20) NOT NULL,
+  conversion_ratio DECIMAL(10,4) NOT NULL,
+  operator ENUM('*','/') DEFAULT '*',
+  FOREIGN KEY (item_id) REFERENCES reject_items_master(id) ON DELETE CASCADE
+);
+
+CREATE TABLE reject_batches (
+  id CHAR(36) PRIMARY KEY,
+  date DATE NOT NULL,
+  outlet VARCHAR(100) NOT NULL,
+  created_at BIGINT NOT NULL
+);
+
+CREATE TABLE reject_batch_items (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  batch_id CHAR(36) NOT NULL,
+  item_id CHAR(36),
+  sku VARCHAR(50),
+  name VARCHAR(150),
+  qty DECIMAL(15,4),
+  unit VARCHAR(20),
+  base_qty DECIMAL(15,4),
+  reason VARCHAR(255),
+  input_qty DECIMAL(15,4),
+  input_unit VARCHAR(20),
+  FOREIGN KEY (batch_id) REFERENCES reject_batches(id) ON DELETE CASCADE
+);
+
+-- Music
+CREATE TABLE playlists (
+  id CHAR(36) PRIMARY KEY,
+  name VARCHAR(100) NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE songs (
+  id CHAR(36) PRIMARY KEY,
+  playlist_id CHAR(36) NOT NULL,
+  title VARCHAR(200) NOT NULL,
+  youtube_url VARCHAR(500) NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (playlist_id) REFERENCES playlists(id) ON DELETE CASCADE
+);
+
+-- System Config
+CREATE TABLE system_settings (
+  setting_key VARCHAR(100) PRIMARY KEY,
+  setting_value TEXT
+);
+```
+
+---
+
+## 🌐 API ENDPOINTS
+
+### Auth
+```
+POST   /api/auth/login          Body: { username, password }
+POST   /api/auth/logout
+```
+
+### Inventory
+```
+GET    /api/inventory/items
+POST   /api/inventory/items           (upsert by id)
+POST   /api/inventory/items/bulk-upsert  Body: { items[] }
+POST   /api/inventory/items/bulk-delete  Body: { ids[] }
+
+GET    /api/inventory/warehouses
+POST   /api/inventory/warehouses      (upsert)
+DELETE /api/inventory/warehouses/:id
+
+GET    /api/inventory/partners
+POST   /api/inventory/partners        (upsert)
+DELETE /api/inventory/partners/:id
+
+GET    /api/inventory/users
+POST   /api/inventory/users           (upsert, hash password)
+DELETE /api/inventory/users/:id
+
+GET    /api/inventory/stocks          (semua stok per item per gudang)
+
+GET    /api/inventory/config/:key
+POST   /api/inventory/config          Body: { key, value }
+```
+
+### Transactions
+```
+GET    /api/transactions?start=&end=&warehouse=&type=
+POST   /api/transactions              (create + update stock)
+PUT    /api/transactions/:id          (update + revert & reapply stock)
+DELETE /api/transactions/:id?hard=true|false
+```
+
+### Reject
+```
+GET    /api/reject/outlets
+POST   /api/reject/outlets            Body: { name }
+GET    /api/reject/master-items
+POST   /api/reject/master-items
+DELETE /api/reject/master-items/:id
+GET    /api/reject/batches
+POST   /api/reject/batches
+DELETE /api/reject/batches/:id
+```
+
+### Music
+```
+GET    /api/music/playlists
+POST   /api/music/playlists           Body: { name }
+DELETE /api/music/playlists/:id
+POST   /api/music/playlists/:id/songs Body: { title, youtubeUrl }
+DELETE /api/music/songs/:id
+```
+
+---
+
+## 📁 FILE-FILE KUNCI YANG HARUS DIBUAT
+
+### `client/src/constants/theme.ts`
+Objek THEME dengan semua token warna dark & light (lihat bagian Tema di atas).
+
+### `client/src/hooks/useTheme.ts`
+```typescript
+export function useTheme() {
+  const [theme, setTheme] = useState<'dark'|'light'>(() =>
+    (localStorage.getItem('gp_theme') as any) ?? 'dark'
+  );
+  const toggle = () => setTheme(t => {
+    const next = t === 'dark' ? 'light' : 'dark';
+    localStorage.setItem('gp_theme', next);
+    return next;
+  });
+  return { theme, toggle, t: THEME[theme] };
+}
+```
+
+### `client/src/services/api.client.ts`
+```typescript
+export const API_URL = ''; // proxy via vite.config.ts
+export async function apiCall(endpoint: string, options: RequestInit = {}) {
+  const res = await fetch(`${API_URL}${endpoint}`, {
+    ...options,
+    headers: { 'Content-Type': 'application/json', ...options.headers }
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+```
+
+### `client/src/contexts/MasterDataContext.tsx`
+Provide: `items`, `warehouses`, `partners`, `isLoading`, `refreshAll`.
+Load semua data saat mount, gunakan `Promise.all` untuk paralel.
+
+### `server/src/app.js`
+Setup Express dengan urutan middleware:
+1. `app.set('trust proxy', true)`
+2. `cors({ origin: '*', methods: [...] })`
+3. `app.options('*', cors())`
+4. `helmet({ contentSecurityPolicy: false, ... })`
+5. `express.json({ limit: '50mb' })`
+6. `morgan('dev')`
+7. Request timeout 30s
+8. Routes `/api`
+9. 404 handler
+10. Global error handler
+
+### `server/src/services/transaction.service.js`
+Fungsi kritis — semua dalam DB transaction:
+- `processInboundTransaction(body, user)`: tambah stok
+- `processOutboundTransaction(body, user)`: kurangi stok, validasi tidak minus
+- `updateTransaction(id, body, user)`: revert lama → proses baru
+- `deleteTransaction(id, isHardDelete)`: revert stok → hapus record
+
+---
+
+## 🔧 KONFIGURASI
+
+### `client/vite.config.ts`
+```typescript
+export default {
+  plugins: [react()],
+  server: {
+    proxy: {
+      '/api': 'http://localhost:3000'
+    }
+  }
+}
+```
+
+### `server/.env.example`
+```
+PORT=3000
+DB_HOST=localhost
+DB_USER=gudangpro
+DB_PASSWORD=password_anda
+DB_NAME=gudangpro_db
+```
+
+### `vercel.json` (opsional, untuk deploy Vercel)
+```json
+{
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "http://SERVER_URL/api/$1" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
+```
+
+---
+
+## ✅ CHECKLIST IMPLEMENTASI
+
+### Backend
+- [ ] Setup MySQL pool dengan error handling spesifik (ER_ACCESS_DENIED, ER_BAD_DB_ERROR)
+- [ ] `initDb.js` create tables jika belum ada
+- [ ] Semua transaksi DB dalam `BEGIN/COMMIT/ROLLBACK`
+- [ ] Password user di-hash dengan bcrypt (min 10 salt rounds)
+- [ ] Error handler middleware mengembalikan `{ success: false, message }` JSON
+- [ ] Endpoint `/ping` dan `/api/health` untuk monitoring
+- [ ] Server keepAliveTimeout 65000ms (fix Cloudflare 502)
+
+### Frontend
+- [ ] Semua API call via `apiCall()` dari `api.client.ts`
+- [ ] Loading state di setiap data fetch
+- [ ] Toast notification untuk success/error operasi
+- [ ] ConfirmDialog sebelum hapus data
+- [ ] Form validasi client-side sebelum submit
+- [ ] Autocomplete item di TransactionForm (search by nama/kode)
+- [ ] Konversi unit otomatis saat pilih satuan berbeda
+- [ ] Export PDF mutasi stok menggunakan jsPDF + autoTable
+- [ ] Export Excel menggunakan ExcelJS
+- [ ] Responsive: sidebar collapse di mobile, hamburger menu
+- [ ] Custom scrollbar tipis 3px via CSS
+
+---
+
+## 📝 CATATAN TAMBAHAN
+
+1. **Nama Aplikasi:** GudangPro (bisa diganti via konfigurasi)
+2. **Bahasa UI:** Bahasa Indonesia
+3. **Format angka:** `toLocaleString('id-ID')` untuk tampilan
+4. **UUID:** Semua primary key menggunakan UUID v4
+5. **Soft delete:** Item, partner, warehouse menggunakan field `is_active`
+6. **Stok:** Selalu disimpan dalam satuan dasar (`base_qty`), konversi hanya untuk tampilan
+7. **Presisi angka:** Gunakan `Decimal.js` untuk kalkulasi stok agar tidak ada floating point error
+8. **Google Sheets sync:** Via POST ke Google Apps Script URL (no-cors mode)
+
+---
+
+*Gunakan prompt ini sebagai acuan penuh. Implementasikan file per file mulai dari types → services → contexts → components → features.*

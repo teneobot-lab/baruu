@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "GudangPro"
+version = "1.0.0"
+id = "artifacts/gudangpro"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 19550
+
+[services.development]
+run = "pnpm --filter @workspace/gudangpro run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/gudangpro", "run", "build" ]
+publicDir = "artifacts/gudangpro/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19550"
+BASE_PATH = "/"
