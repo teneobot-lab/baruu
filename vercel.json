@@ -1,11 +1,7 @@
 {
   "buildCommand": "pnpm --filter @workspace/gudangpro run build",
-  "outputDirectory": "artifacts/gudangpro/dist/public",
+  "outputDirectory": "artifacts/gudangpro/dist",
   "installCommand": "pnpm install",
-  "env": {
-    "PORT": "3000",
-    "BASE_PATH": "/"
-  },
   "rewrites": [
     {
       "source": "/api/:path*",
