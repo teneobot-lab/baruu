@@ -1,6 +1,7 @@
 import React, { useState, useRef, useCallback } from "react";
 import { Package, Plus, Search, Edit2, Trash2, Upload, Download, X, Check, AlertCircle, FileSpreadsheet } from "lucide-react";
 import { formatNumber } from "@/lib/utils";
+import { apiClient } from "@/lib/api";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { GlassBadge } from "@/components/ui/GlassBadge";
 import { GlassButton } from "@/components/ui/GlassButton";
@@ -138,12 +139,7 @@ function BulkImportModal({ onClose }: { onClose: () => void }) {
     }));
 
     try {
-      const res = await fetch("/api/inventory/items/bulk-import", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rows: payload }),
-      });
-      const data = await res.json();
+      const data = await apiClient.post<ImportResult>("/api/inventory/items/bulk-import", { rows: payload });
       setResult(data);
     } catch {
       setResult({ success: false, total: 0, imported: 0, failed: 0, errors: [{ row: 0, field: "server", message: "Gagal terhubung ke server" }] });
