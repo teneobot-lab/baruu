@@ -230,6 +230,116 @@ router.post("/inventory/items/bulk-delete", async (req: Request, res: Response) 
   }
 });
 
+router.post("/inventory/items/bulk-import", async (req: Request, res: Response) => {
+  try {
+    const { rows } = req.body as { rows: Array<{
+      kode: string; nama: string; kategori?: string | null;
+      satuan_dasar: string; minimum_stok?: number | null;
+      konversi?: string | null;
+    }> };
+
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return res.status(400).json({ error: "rows wajib berupa array non-kosong" });
+    }
+
+    const errors: Array<{ row: number; field: string; message: string }> = [];
+    const total = rows.length;
+    let imported = 0;
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const rowNum = i + 2; // Excel row (1-indexed header = row 1)
+
+      // Validate required fields
+      if (!row.kode?.trim()) {
+        errors.push({ row: rowNum, field: "kode", message: "Kode barang wajib diisi" });
+        continue;
+      }
+      if (!row.nama?.trim()) {
+        errors.push({ row: rowNum, field: "nama", message: "Nama barang wajib diisi" });
+        continue;
+      }
+      if (!row.satuan_dasar?.trim()) {
+        errors.push({ row: rowNum, field: "satuan_dasar", message: "Satuan dasar wajib diisi" });
+        continue;
+      }
+
+      const itemId = randomUUID();
+      const minStock = Number(row.minimum_stok ?? 0);
+
+      // Parse conversions: "SATUAN,NILAI;SATUAN2,NILAI2"
+      const conversions: Array<{ itemId: string; unitName: string; conversionRatio: string; operator: "*" | "/" }> = [];
+      if (row.konversi?.trim()) {
+        const convParts = row.konversi.split(";").filter(Boolean);
+        for (const part of convParts) {
+          const commaIdx = part.lastIndexOf(",");
+          if (commaIdx === -1) {
+            errors.push({ row: rowNum, field: "konversi", message: `Format konversi salah: "${part}". Gunakan format "SATUAN,NILAI"` });
+            continue;
+          }
+          const unitName = part.slice(0, commaIdx).trim();
+          const ratioStr = part.slice(commaIdx + 1).trim();
+          const ratio = Number(ratioStr);
+          if (!unitName || Number.isNaN(ratio) || ratio <= 0) {
+            errors.push({ row: rowNum, field: "konversi", message: `Konversi "${part}" tidak valid. Contoh: "DUS,24"` });
+            continue;
+          }
+          conversions.push({ itemId, unitName, conversionRatio: String(ratio), operator: "*" });
+        }
+      }
+
+      try {
+        await db.insert(itemsTable).values({
+          id: itemId,
+          code: row.kode.trim(),
+          name: row.nama.trim(),
+          category: row.kategori?.trim() ?? null,
+          baseUnit: row.satuan_dasar.trim().toUpperCase(),
+          minStock: String(minStock),
+          isActive: true,
+        }).onConflictDoUpdate({
+          target: itemsTable.code,
+          set: {
+            name: row.nama.trim(),
+            category: row.kategori?.trim() ?? null,
+            baseUnit: row.satuan_dasar.trim().toUpperCase(),
+            minStock: String(minStock),
+          },
+        });
+
+        if (conversions.length > 0) {
+          // Get the item id (may have been updated)
+          const [existing] = await db.select({ id: itemsTable.id }).from(itemsTable).where(eq(itemsTable.code, row.kode.trim()));
+          const targetId = existing?.id ?? itemId;
+
+          // Delete existing conversions
+          await db.delete(itemUnitsTable).where(eq(itemUnitsTable.itemId, targetId));
+          // Insert new conversions with the correct itemId
+          await db.insert(itemUnitsTable).values(
+            conversions.map((c) => ({ itemId: targetId, unitName: c.unitName, conversionRatio: c.conversionRatio, operator: c.operator })),
+          );
+        }
+
+        imported++;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Terjadi kesalahan";
+        errors.push({ row: rowNum, field: "server", message: msg });
+      }
+    }
+
+    return res.json({
+      success: errors.length === 0,
+      total,
+      imported,
+      failed: total - imported,
+      errors,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Terjadi kesalahan";
+    return res.status(500).json({ error: message });
+  }
+});
+
 // ─── WAREHOUSES ────────────────────────────────────────────────────────────────
 
 router.get("/inventory/warehouses", async (_req: Request, res: Response) => {

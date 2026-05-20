@@ -1,10 +1,11 @@
-import React, { useState } from "react";
-import { Plus, Search, Eye, ArrowDown, ArrowUp, ArrowLeftRight, Sliders } from "lucide-react";
+import React, { useState, useRef } from "react";
+import { Plus, Search, Eye, ArrowDown, ArrowUp, ArrowLeftRight, Sliders, Upload, Download, FileSpreadsheet, Check, AlertCircle } from "lucide-react";
 import { formatDate, formatNumber } from "@/lib/utils";
 import { TransactionForm, type TxType, type TxFormData } from "@/components/TransactionForm";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { GlassBadge } from "@/components/ui/GlassBadge";
 import { GlassModal } from "@/components/ui/GlassModal";
+import { GlassButton } from "@/components/ui/GlassButton";
 
 const TYPE_LABELS: Record<TxType, string> = {
   IN: "Masuk", OUT: "Keluar", TRANSFER: "Transfer", ADJUSTMENT: "Penyesuaian",
@@ -21,6 +22,24 @@ const TYPE_ICONS: Record<TxType, React.ElementType> = {
   IN: ArrowDown, OUT: ArrowUp, TRANSFER: ArrowLeftRight, ADJUSTMENT: Sliders,
 };
 
+// ─── Template CSV ───────────────────────────────────────────────────────────────
+const TX_TEMPLATE_CSV = [
+  "tipe,tanggal,gudang_asal,gudang_tujuan,mitra,no_sj,kode_barang,jumlah,satuan,catatan",
+  "IN,2026-05-20,Nama Gudang,,Nama Supplier,,BRG-001,10,PCS,",
+  "OUT,2026-05-20,Nama Gudang,,Nama Customer,,BRG-001,5,PCS,",
+  "TRANSFER,2026-05-20,Gudang Asal,Gudang Tujuan,,,BRG-001,3,PCS,",
+].join("\n");
+
+function downloadTemplate(filename: string, content: string) {
+  const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 interface SavedTx {
   id: string; refNo: string; type: TxType; date: string;
   warehouseName: string; destWarehouseName?: string;
@@ -30,6 +49,263 @@ interface SavedTx {
 const MOCK_TX: SavedTx[] = [
   { id: "tx-001", refNo: "IN-20260519-0001", type: "IN", date: "2026-05-19", warehouseName: "Gudang Utama", partnerName: "PT Maju Jaya Supplier", itemCount: 2, total: 2080000 },
 ];
+
+// ─── Bulk Import Modal ─────────────────────────────────────────────────────────
+interface ImportResult {
+  success: boolean;
+  total: number;
+  imported: number;
+  failed: number;
+  errors: Array<{ row: number; field: string; message: string }>;
+}
+
+function BulkImportModal({ onClose }: { onClose: () => void }) {
+  const [dragOver, setDragOver] = useState(false);
+  const [fileName, setFileName] = useState<string | null>(null);
+  const [preview, setPreview] = useState<string[][]>([]);
+  const [result, setResult] = useState<ImportResult | null>(null);
+  const [loading, setLoading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const parseCSV = (text: string): string[][] => {
+    const lines = text.trim().split("\n");
+    return lines.map((line) => {
+      const cells: string[] = [];
+      let current = "";
+      let inQuotes = false;
+      for (const char of line) {
+        if (char === '"') {
+          inQuotes = !inQuotes;
+        } else if (char === "," && !inQuotes) {
+          cells.push(current.trim());
+          current = "";
+        } else {
+          current += char;
+        }
+      }
+      cells.push(current.trim());
+      return cells;
+    });
+  };
+
+  const handleFile = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target?.result as string;
+      const rows = parseCSV(text);
+      setFileName(file.name);
+      setPreview(rows.slice(0, 6));
+      setResult(null);
+    };
+    reader.readAsText(file);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files[0];
+    if (file && file.name.endsWith(".csv")) {
+      handleFile(file);
+    }
+  };
+
+  const handleImport = async () => {
+    const file = fileRef.current?.files?.[0];
+    if (!file) return;
+
+    setLoading(true);
+    const text = await file.text();
+    const rows = parseCSV(text);
+
+    const header = rows[0];
+    const dataRows = rows.slice(1).filter((r) => r.some((c) => c.trim()));
+
+    const normalizeRow = (row: string[]): Record<string, string> => {
+      const obj: Record<string, string> = {};
+      header.forEach((col, idx) => {
+        const key = col.trim().toLowerCase().replace(/\s+/g, "_");
+        obj[key] = row[idx] ?? "";
+      });
+      return obj;
+    };
+
+    const normalized = dataRows.map(normalizeRow);
+
+    const payload = normalized.map((r) => ({
+      tipe: r["tipe"] ?? "",
+      tanggal: r["tanggal"] ?? "",
+      gudang_asal: r["gudang_asal"] ?? "",
+      gudang_tujuan: r["gudang_tujuan"] ?? "",
+      mitra: r["mitra"] ?? "",
+      no_sj: r["no_sj"] ?? "",
+      kode_barang: r["kode_barang"] ?? "",
+      jumlah: Number(r["jumlah"] ?? "0"),
+      satuan: r["satuan"] ?? "",
+      catatan: r["catatan"] ?? "",
+    }));
+
+    try {
+      const res = await fetch("/api/transactions/bulk-import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rows: payload }),
+      });
+      const data = await res.json();
+      setResult(data);
+    } catch {
+      setResult({ success: false, total: 0, imported: 0, failed: 0, errors: [{ row: 0, field: "server", message: "Gagal terhubung ke server" }] });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <GlassModal
+      open={true}
+      onClose={onClose}
+      title="Import Transaksi"
+      subtitle="Upload file CSV untuk import transaksi secara bulk"
+      maxWidth={600}
+      footer={
+        result ? (
+          <>
+            <GlassButton variant="secondary" onClick={onClose}>Tutup</GlassButton>
+            {result.imported > 0 && (
+              <GlassButton variant="primary" onClick={onClose}>
+                <Check size={16} /> Selesai
+              </GlassButton>
+            )}
+          </>
+        ) : (
+          <>
+            <GlassButton variant="secondary" onClick={onClose}>Batal</GlassButton>
+            <GlassButton variant="primary" onClick={handleImport} disabled={!fileName || loading}>
+              {loading ? "Mengimport..." : "Import Sekarang"}
+            </GlassButton>
+          </>
+        )
+      }
+    >
+      {/* Template download */}
+      <div style={{ marginBottom: 16 }}>
+        <GlassButton
+          variant="secondary"
+          onClick={() => downloadTemplate("template_transaksi.csv", TX_TEMPLATE_CSV)}
+          style={{ fontSize: 12, padding: "6px 12px" }}
+        >
+          <Download size={14} /> Download Template CSV
+        </GlassButton>
+        <p style={{ fontSize: 11, color: "#94a3b8", margin: "4px 0 0" }}>
+          Kolom: tipe, tanggal, gudang_asal, gudang_tujuan, mitra, no_sj, kode_barang, jumlah, satuan, catatan
+        </p>
+      </div>
+
+      {/* Drop zone */}
+      {!result && (
+        <div
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={handleDrop}
+          onClick={() => fileRef.current?.click()}
+          style={{
+            border: `2px dashed ${dragOver ? "#1e3a5f" : "rgba(148,163,184,0.3)"}`,
+            borderRadius: 12,
+            padding: "32px 20px",
+            textAlign: "center",
+            cursor: "pointer",
+            background: dragOver ? "rgba(30,58,95,0.05)" : "rgba(255,255,255,0.4)",
+            transition: "all 0.2s ease",
+            marginBottom: 12,
+          }}
+        >
+          <FileSpreadsheet size={36} style={{ margin: "0 auto 8px", color: "#94a3b8" }} />
+          <p style={{ margin: 0, fontWeight: 600, color: "#1e2d40", fontSize: 13 }}>
+            {fileName ? fileName : "Drag & drop file CSV di sini, atau klik untuk pilih"}
+          </p>
+          <p style={{ margin: "4px 0 0", fontSize: 11, color: "#94a3b8" }}>Format: CSV</p>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".csv"
+            style={{ display: "none" }}
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
+          />
+        </div>
+      )}
+
+      {/* Preview */}
+      {preview.length > 0 && !result && (
+        <div style={{ marginBottom: 12 }}>
+          <p style={{ fontSize: 12, fontWeight: 600, color: "#1e2d40", margin: "0 0 6px" }}>Preview ({preview.length - 1} baris)</p>
+          <div style={{ overflowX: "auto", maxHeight: 180, overflowY: "auto" }}>
+            <table style={{ fontSize: 11, borderCollapse: "collapse", width: "100%" }}>
+              <thead>
+                <tr style={{ background: "rgba(148,163,184,0.08)" }}>
+                  {preview[0].map((h, i) => (
+                    <th key={i} style={{ padding: "6px 8px", textAlign: "left", fontWeight: 600, color: "#94a3b8", borderBottom: "1px solid rgba(148,163,184,0.15)", whiteSpace: "nowrap" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {preview.slice(1, 5).map((row, ri) => (
+                  <tr key={ri}>
+                    {row.map((cell, ci) => (
+                      <td key={ci} style={{ padding: "5px 8px", borderBottom: "1px solid rgba(148,163,184,0.08)", color: "#334155" }}>{cell || "—"}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Result */}
+      {result && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ display: "flex", gap: 10 }}>
+            <div style={{ flex: 1, background: "rgba(22,163,74,0.08)", border: "1px solid rgba(22,163,74,0.2)", borderRadius: 10, padding: "12px 16px", textAlign: "center" }}>
+              <p style={{ fontSize: 24, fontWeight: 800, color: "#16a34a", margin: 0 }}>{result.imported}</p>
+              <p style={{ fontSize: 11, color: "#16a34a", margin: 0 }}>Berhasil</p>
+            </div>
+            <div style={{ flex: 1, background: "rgba(220,38,38,0.08)", border: "1px solid rgba(220,38,38,0.2)", borderRadius: 10, padding: "12px 16px", textAlign: "center" }}>
+              <p style={{ fontSize: 24, fontWeight: 800, color: "#dc2626", margin: 0 }}>{result.failed}</p>
+              <p style={{ fontSize: 11, color: "#dc2626", margin: 0 }}>Gagal</p>
+            </div>
+            <div style={{ flex: 1, background: "rgba(148,163,184,0.08)", border: "1px solid rgba(148,163,184,0.15)", borderRadius: 10, padding: "12px 16px", textAlign: "center" }}>
+              <p style={{ fontSize: 24, fontWeight: 800, color: "#1e2d40", margin: 0 }}>{result.total}</p>
+              <p style={{ fontSize: 11, color: "#94a3b8", margin: 0 }}>Total</p>
+            </div>
+          </div>
+
+          {result.errors.length > 0 && (
+            <div>
+              <p style={{ fontSize: 12, fontWeight: 600, color: "#dc2626", margin: "0 0 6px", display: "flex", alignItems: "center", gap: 4 }}>
+                <AlertCircle size={14} /> Error per baris
+              </p>
+              <div style={{ background: "rgba(220,38,38,0.05)", border: "1px solid rgba(220,38,38,0.1)", borderRadius: 8, padding: "10px 12px", maxHeight: 160, overflowY: "auto" }}>
+                {result.errors.map((err, i) => (
+                  <div key={i} style={{ fontSize: 11, color: "#334155", marginBottom: 4 }}>
+                    <span style={{ background: "rgba(220,38,38,0.1)", color: "#dc2626", borderRadius: 4, padding: "1px 5px", fontWeight: 600 }}>Baris {err.row}</span>
+                    <span style={{ marginLeft: 6, color: "#94a3b8" }}>[{err.field}]</span>
+                    <span style={{ marginLeft: 4 }}>{err.message}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </GlassModal>
+  );
+}
+
+// ─── Detail Modal ───────────────────────────────────────────────────────────────
+interface SavedTx {
+  id: string; refNo: string; type: TxType; date: string;
+  warehouseName: string; destWarehouseName?: string;
+  partnerName: string; itemCount: number; total: number;
+}
 
 function DetailModal({ tx, onClose }: { tx: SavedTx; onClose: () => void }) {
   const Icon = TYPE_ICONS[tx.type];
@@ -60,12 +336,14 @@ function DetailModal({ tx, onClose }: { tx: SavedTx; onClose: () => void }) {
   );
 }
 
+// ─── Main Transactions Page ─────────────────────────────────────────────────────
 export default function TransactionsPage() {
   const [transactions, setTransactions] = useState<SavedTx[]>(MOCK_TX);
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState<TxType | "ALL">("ALL");
   const [showForm, setShowForm] = useState<TxType | null>(null);
   const [viewTx, setViewTx] = useState<SavedTx | null>(null);
+  const [showImportModal, setShowImportModal] = useState(false);
 
   const filtered = transactions.filter(tx =>
     (filterType === "ALL" || tx.type === filterType) &&
@@ -102,8 +380,10 @@ export default function TransactionsPage() {
           <h2 style={{ fontSize: 22, fontWeight: 800, color: "#1e2d40", letterSpacing: "-0.3px", margin: "0 0 4px" }}>Transaksi</h2>
           <p style={{ fontSize: 13, color: "#94a3b8", margin: 0 }}>{transactions.length} total transaksi</p>
         </div>
-        {/* Transaction type buttons */}
         <div style={{ display: "flex", gap: 8 }}>
+          <GlassButton variant="secondary" onClick={() => setShowImportModal(true)}>
+            <Upload size={16} /> Import
+          </GlassButton>
           {TX_TYPES.map(t => {
             const Icon = TYPE_ICONS[t];
             return (
@@ -286,6 +566,9 @@ export default function TransactionsPage() {
 
       {/* Detail modal */}
       {viewTx && <DetailModal tx={viewTx} onClose={() => setViewTx(null)} />}
+
+      {/* Import modal */}
+      {showImportModal && <BulkImportModal onClose={() => setShowImportModal(false)} />}
     </div>
   );
 }

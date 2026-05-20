@@ -578,4 +578,189 @@ router.delete("/transactions/:id", async (req: Request, res: Response) => {
   }
 });
 
+router.post("/transactions/bulk-import", async (req: Request, res: Response) => {
+  try {
+    const { rows } = req.body as { rows: Array<{
+      tipe: string; tanggal: string; gudang_asal: string;
+      gudang_tujuan?: string | null; mitra?: string | null;
+      no_sj?: string | null; kode_barang: string;
+      jumlah: number; satuan: string; catatan?: string | null;
+    }> };
+
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return res.status(400).json({ error: "rows wajib berupa array non-kosong" });
+    }
+
+    const VALID_TYPES = ["IN", "OUT", "TRANSFER", "ADJUSTMENT"];
+    const errors: Array<{ row: number; field: string; message: string }> = [];
+    const total = rows.length;
+    let imported = 0;
+
+    // Pre-fetch all warehouses and items for validation
+    const allWarehouses = await db.select().from(warehousesTable);
+    const whNameMap = new Map(allWarehouses.map((w) => [w.name.toLowerCase(), w]));
+    const allItems = await db.select().from(itemsTable);
+    const itemCodeMap = new Map(allItems.map((i) => [i.code.toLowerCase(), i]));
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const rowNum = i + 2;
+
+      // Validate required fields
+      if (!VALID_TYPES.includes(row.tipe)) {
+        errors.push({ row: rowNum, field: "tipe", message: `Tipe tidak valid: "${row.tipe}". Gunakan: IN, OUT, TRANSFER, atau ADJUSTMENT` });
+        continue;
+      }
+      if (!row.tanggal?.trim()) {
+        errors.push({ row: rowNum, field: "tanggal", message: "Tanggal wajib diisi" });
+        continue;
+      }
+      if (!row.gudang_asal?.trim()) {
+        errors.push({ row: rowNum, field: "gudang_asal", message: "Gudang asal wajib diisi" });
+        continue;
+      }
+      if (!row.kode_barang?.trim()) {
+        errors.push({ row: rowNum, field: "kode_barang", message: "Kode barang wajib diisi" });
+        continue;
+      }
+      if (typeof row.jumlah !== "number" || row.jumlah <= 0) {
+        errors.push({ row: rowNum, field: "jumlah", message: "Jumlah harus angka lebih dari 0" });
+        continue;
+      }
+      if (!row.satuan?.trim()) {
+        errors.push({ row: rowNum, field: "satuan", message: "Satuan wajib diisi" });
+        continue;
+      }
+
+      // Validate warehouse
+      const srcWh = whNameMap.get(row.gudang_asal.trim().toLowerCase());
+      if (!srcWh) {
+        errors.push({ row: rowNum, field: "gudang_asal", message: `Gudang "${row.gudang_asal}" tidak ditemukan` });
+        continue;
+      }
+
+      // Validate target warehouse for TRANSFER
+      let tgtWhId: string | null = null;
+      if (row.tipe === "TRANSFER") {
+        if (!row.gudang_tujuan?.trim()) {
+          errors.push({ row: rowNum, field: "gudang_tujuan", message: "Gudang tujuan wajib untuk tipe TRANSFER" });
+          continue;
+        }
+        const tgtWh = whNameMap.get(row.gudang_tujuan.trim().toLowerCase());
+        if (!tgtWh) {
+          errors.push({ row: rowNum, field: "gudang_tujuan", message: `Gudang tujuan "${row.gudang_tujuan}" tidak ditemukan` });
+          continue;
+        }
+        tgtWhId = tgtWh.id;
+        if (tgtWh.id === srcWh.id) {
+          errors.push({ row: rowNum, field: "gudang_tujuan", message: "Gudang asal dan tujuan tidak boleh sama" });
+          continue;
+        }
+      }
+
+      // Validate item by code
+      const item = itemCodeMap.get(row.kode_barang.trim().toLowerCase());
+      if (!item) {
+        errors.push({ row: rowNum, field: "kode_barang", message: `Barang dengan kode "${row.kode_barang}" tidak ditemukan` });
+        continue;
+      }
+
+      // Determine conversion ratio
+      const baseUnit = item.baseUnit;
+      const convRatio = row.satuan.trim().toUpperCase() === baseUnit.toUpperCase()
+        ? 1
+        : 1; // For now use 1; full implementation would look up item_units table
+
+      const baseQty = row.jumlah * convRatio;
+      const userId = (req as AuthenticatedRequest).user?.userId;
+      const txId = randomUUID();
+      const refNo = `${row.tipe}-${row.tanggal.replace(/-/g, "")}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+
+      try {
+        await db.transaction(async (trx) => {
+          await trx.insert(transactionsTable).values({
+            id: txId,
+            referenceNo: refNo,
+            type: row.tipe as "IN" | "OUT" | "TRANSFER" | "ADJUSTMENT",
+            date: row.tanggal,
+            sourceWarehouseId: srcWh.id,
+            targetWarehouseId: tgtWhId,
+            partnerId: null,
+            partnerName: row.mitra?.trim() ?? null,
+            deliveryOrderNo: row.no_sj?.trim() ?? null,
+            notes: row.catatan?.trim() ?? null,
+            createdBy: userId ?? null,
+          });
+
+          const { srcDelta, tgtDelta } = getStockDelta(row.tipe, baseQty);
+
+          // Update source warehouse stock
+          const srcResult = await trx
+            .update(stockTable)
+            .set({ qty: sql`${stockTable.qty} + ${srcDelta}`, lastUpdated: new Date() })
+            .where(and(eq(stockTable.warehouseId, srcWh.id), eq(stockTable.itemId, item.id)))
+            .returning({ qty: stockTable.qty });
+
+          if (srcResult.length === 0) {
+            if (srcDelta >= 0) {
+              await trx.insert(stockTable).values({
+                warehouseId: srcWh.id,
+                itemId: item.id,
+                qty: String(srcDelta),
+                lastUpdated: new Date(),
+              });
+            } else {
+              throw new Error("Stok tidak mencukupi");
+            }
+          }
+
+          // Update target warehouse stock for TRANSFER
+          if (tgtDelta !== undefined && tgtWhId) {
+            const tgtResult = await trx
+              .update(stockTable)
+              .set({ qty: sql`${stockTable.qty} + ${tgtDelta}`, lastUpdated: new Date() })
+              .where(and(eq(stockTable.warehouseId, tgtWhId), eq(stockTable.itemId, item.id)))
+              .returning({ qty: stockTable.qty });
+
+            if (tgtResult.length === 0) {
+              await trx.insert(stockTable).values({
+                warehouseId: tgtWhId,
+                itemId: item.id,
+                qty: String(tgtDelta),
+                lastUpdated: new Date(),
+              });
+            }
+          }
+
+          await trx.insert(transactionItemsTable).values({
+            transactionId: txId,
+            itemId: item.id,
+            qty: String(row.jumlah),
+            unit: row.satuan.trim().toUpperCase(),
+            conversionRatio: String(convRatio),
+            baseQty: String(baseQty),
+            note: row.catatan?.trim() ?? null,
+          });
+        });
+
+        imported++;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Terjadi kesalahan";
+        errors.push({ row: rowNum, field: "server", message: msg });
+      }
+    }
+
+    return res.json({
+      success: errors.length === 0,
+      total,
+      imported,
+      failed: total - imported,
+      errors,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Terjadi kesalahan";
+    return res.status(500).json({ error: message });
+  }
+});
+
 export default router;

@@ -231,6 +231,44 @@ paths:
         "200":
           description: OK
 
+  /inventory/items/bulk-import:
+    post:
+      operationId: bulkImportItems
+      tags: [inventory]
+      summary: Bulk import items from CSV
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkImportItemsInput"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkImportResult"
+
+  /transactions/bulk-import:
+    post:
+      operationId: bulkImportTransactions
+      tags: [transactions]
+      summary: Bulk import transactions from CSV
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkImportTransactionsInput"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkImportResult"
+
   # ─── WAREHOUSES ──────────────────────────────────────────────────────────────
   /inventory/warehouses:
     get:
@@ -994,6 +1032,111 @@ components:
           type: array
           items:
             type: string
+
+    BulkImportResult:
+      type: object
+      required: [success, total, imported, failed]
+      properties:
+        success:
+          type: boolean
+        total:
+          type: integer
+        imported:
+          type: integer
+        failed:
+          type: integer
+        errors:
+          type: array
+          items:
+            $ref: "#/components/schemas/BulkImportError"
+
+    BulkImportError:
+      type: object
+      required: [row, field, message]
+      properties:
+        row:
+          type: integer
+        field:
+          type: string
+        message:
+          type: string
+
+    BulkImportItemsInput:
+      type: object
+      required: [rows]
+      properties:
+        rows:
+          type: array
+          items:
+            $ref: "#/components/schemas/BulkImportItemRow"
+
+    BulkImportItemRow:
+      type: object
+      required: [kode, nama, satuan_dasar]
+      properties:
+        kode:
+          type: string
+          description: Kode barang unik
+        nama:
+          type: string
+          description: Nama barang
+        kategori:
+          type: ["string", "null"]
+          description: Kategori barang (opsional)
+        satuan_dasar:
+          type: string
+          description: Satuan dasar (contoh: PCS, BOTOL, KG)
+        minimum_stok:
+          type: ["number", "null"]
+          description: Minimum stok (opsional, default 0)
+        konversi:
+          type: ["string", "null"]
+          description: Konversi satuan opsional format "SATUAN,NILAI" (contoh: "DUS,24" = 1 DUS = 24 satuan dasar, pisahkan dengan ; untuk banyak)
+
+    BulkImportTransactionsInput:
+      type: object
+      required: [rows]
+      properties:
+        rows:
+          type: array
+          items:
+            $ref: "#/components/schemas/BulkImportTransactionRow"
+
+    BulkImportTransactionRow:
+      type: object
+      required: [tipe, tanggal, gudang_asal, kode_barang, jumlah, satuan]
+      properties:
+        tipe:
+          type: string
+          enum: [IN, OUT, TRANSFER, ADJUSTMENT]
+          description: Tipe transaksi
+        tanggal:
+          type: string
+          description: Tanggal transaksi (format: YYYY-MM-DD)
+        gudang_asal:
+          type: string
+          description: Nama gudang asal
+        gudang_tujuan:
+          type: ["string", "null"]
+          description: Nama gudang tujuan (wajib untuk TRANSFER)
+        mitra:
+          type: ["string", "null"]
+          description: Nama mitra/supplier/customer (opsional)
+        no_sj:
+          type: ["string", "null"]
+          description: Nomor surat jalan (opsional)
+        kode_barang:
+          type: string
+          description: Kode barang
+        jumlah:
+          type: number
+          description: Jumlah qty
+        satuan:
+          type: string
+          description: Satuan yang digunakan
+        catatan:
+          type: ["string", "null"]
+          description: Catatan per item (opsional)
 
     # ─── WAREHOUSE ─────────────────────────────────────────────────────────────
     Warehouse:

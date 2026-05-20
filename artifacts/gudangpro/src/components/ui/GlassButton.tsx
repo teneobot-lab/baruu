@@ -4,6 +4,7 @@ type ButtonVariant = "primary" | "secondary" | "danger" | "ghost";
 
 interface GlassButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
+  danger?: boolean;
   children: React.ReactNode;
   style?: React.CSSProperties;
   className?: string;
@@ -62,18 +63,20 @@ const variantStyles: Record<ButtonVariant, React.CSSProperties> = {
 
 export const GlassButton: React.FC<GlassButtonProps> = ({
   variant = "primary",
+  danger,
   children,
   style,
   className,
   disabled,
   ...props
 }) => {
+  const resolvedVariant = danger ? "danger" : variant;
   return (
     <button
       className={className}
       style={{
         ...baseBtn,
-        ...variantStyles[variant],
+        ...variantStyles[resolvedVariant],
         opacity: disabled ? 0.5 : 1,
         cursor: disabled ? "not-allowed" : "pointer",
         ...style,
